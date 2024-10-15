@@ -386,3 +386,25 @@ class animation:
             "steps": []
         }
         return sliders_dict
+    
+    def animate(figs):
+        fig_dict = {
+            "data": figs[0]["data"],
+            "layout": figs[0]["layout"],
+            "frames": [go.Frame(data=fig["data"], name=str(i)) for i, fig in enumerate(figs)]
+        }
+        sliders_dict = animation.config_slider()
+        sliders_dict["steps"] = [
+            {
+                "args": [
+                    [step],
+                    {"frame": {"duration": 300, "redraw": True},
+                    "mode": "immediate",
+                    "transition": {"duration": 300}}
+                ],
+                "label": step,
+                "method": "animate"
+            }        
+        for step in range(len(figs))]
+        fig_dict["layout"]["sliders"] = [sliders_dict]
+        return fig_dict

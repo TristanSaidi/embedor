@@ -4,6 +4,9 @@ import numpy as np
 from src.orcml import *
 from src.graph_utils import *
 from src.plotting import *
+import sklearn.metrics as metrics
+from tqdm import tqdm
+import warnings
 
 def isorc_annotate(G, lda=0.01, delta=0.8, verbose=False):
     """
@@ -116,7 +119,7 @@ def isorc_summary(G):
         D_G_prime[v, u] = d
     return sc_ind, D_G_prime
 
-def equilibrium_matrix(sc_ind, D_G_prime, A, dist_scale=1.5):
+def equilibrium_matrix(sc_ind, D_G_prime, A, dist_scale=1.0):
     """
     Compute the spring equilibrium matrix for the isorc embedding.
     Parameters
@@ -138,7 +141,7 @@ def equilibrium_matrix(sc_ind, D_G_prime, A, dist_scale=1.5):
     E = np.maximum(A, sc_ind * D_G_prime * dist_scale)
     return E
 
-def compute_forces_parallel(E, G, A, X, sc_ind, k=50, k_sc=0.1):
+def compute_forces_parallel(E, G, A, X, sc_ind, k=5, k_sc=0.1, encourge_spread=True, D_pw=None, spread_force_scale=0.1):
     """ 
     Compute the forces on the nodes of the graph using a vectorized implementation.
     Parameters
@@ -161,8 +164,8 @@ def compute_forces_parallel(E, G, A, X, sc_ind, k=50, k_sc=0.1):
     -------
     F : np.ndarray
         The forces on the nodes.
-    total_energy : float
-        The total potential energy of the system
+    pe : float
+        The potential energy of the system
     """
     # X.T is D x N
     # Broadcast X.T to N x D x N
@@ -185,97 +188,38 @@ def compute_forces_parallel(E, G, A, X, sc_ind, k=50, k_sc=0.1):
     F = np.matmul(D_batched, D_eq_masked_K[:, :, np.newaxis]) # N x D x 1
     # flatten F to get N x D
     F = np.squeeze(F, axis=2) # N x D
-    # compute total energy
-    total_energy = 0.5 * np.sum(D_eq_masked * D_eq_masked * K)
-    return F, total_energy
+    # compute potential energy
+    pe = 0.5 * np.sum(D_eq_masked * D_eq_masked * K)
 
-def compute_forces_local(E, G, A, X, i, sc_ind, k, k_sc):
-    """ 
-    Compute the forces on a single node.
-    Parameters
-    ----------
-    E : np.ndarray
-        The equilibrium matrix.
-    G : networkx.Graph
-        The graph.
-    A : np.ndarray
-        The adjacency matrix.
-    X : np.ndarray
-        The node positions.
-    i : int
-        The node index to compute forces for.
-    sc_ind : np.ndarray
-        The shortcut indicator matrix.
-    k : float, optional
-        The spring constant for good edges.
-    k_sc : float, optional
-        The spring constant for shortcuts.
-    Returns
-    -------
-    F : np.ndarray
-        The forces on the nodes.
-    total_energy : float
-        The total potential energy of the system
-    """
-    # compute spring constant vector. k for good edges, k_sc for shortcuts
-    k_i = np.where(sc_ind[i] == 1, k_sc, k)
-    # get adjacency of node i
-    A_i = A[i]
-    # get indicator of adjacency of node i
-    ind_i = np.where(A_i > 0, 1, 0)
-    # get the equilibrium vector of the neighborhood of node i
-    E_i = E[i]
-    # get displacement vector from equilibrium of node i to others
-    D_eq_i = A_i - E_i
-    # get the pos of node i
-    v_i = X[i]
-    # broadcast node i to the size of the |V|. Transpose to get a column vector
-    V_i = np.tile(v_i, (len(G.nodes), 1)).T
-    # compute displacement vector from node i to others
-    D_i = X.T - V_i
-    # compute energies
-    en_i = 0.5 * np.sum(D_eq_i * D_eq_i * k_i)
-    # element-wise product of D_eq_i and ind_i
-    D_eq_i_masked = D_eq_i * ind_i
-    # compute the forces acting on node i
-    F_i = D_i @ (D_eq_i_masked * k_i)
-    return F_i, en_i
+    # if we want to encourage points to be spread out
+    if encourge_spread:
+        # small repulsion force to encourage spread
 
-def compute_forces(E, G, A, X, sc_ind, k=50, k_sc=0.1):
-    """ 
-    Compute the forces on the nodes of the graph using a serial implementation.
-    Parameters
-    ----------
-    E : np.ndarray
-        The equilibrium matrix.
-    G : networkx.Graph
-        The graph.
-    A : np.ndarray
-        The adjacency matrix.
-    X : np.ndarray
-        The node positions.
-    sc_ind : np.ndarray
-        The shortcut indicator matrix.
-    k : float, optional
-        The spring constant for good edges.
-    k_sc : float, optional
-        The spring constant for shortcuts.
-    Returns
-    -------
-    F : np.ndarray
-        The forces on the nodes.
-    total_energy : float
-        The total potential energy of the system
-    """
-    forces = np.zeros((len(G.nodes), X.shape[1]))
-    # for each node, compute the force
-    total_energy = 0
-    for i in G.nodes:
-        forces[i, :], en_i = compute_forces_local(E, G, A, X, i, sc_ind, k=k, k_sc=k_sc)
-        total_energy += en_i
-    return forces, total_energy
+        # compute pairwise distances
+        if D_pw is None:
+            D_pw = metrics.pairwise_distances(X)
 
-def step_physics(F, G, dt, mass, damping=0.1):
+        D_batched_norm = np.linalg.norm(D_batched, axis=1)
+        # fill diagonal with 1 to avoid division by zero
+        np.fill_diagonal(D_batched_norm, 1)
+        D_batched_unit = D_batched / D_batched_norm[:, :, np.newaxis].transpose(0, 2, 1)
+
+        D_pw_sqrd = D_pw**2
+        # fill diagonal with 1 to avoid division by zero
+        np.fill_diagonal(D_pw_sqrd, 1)
+        inv_D_pw_clamped_sqrd = 1 / D_pw_sqrd
+        # compute the spread forces. Start with 1/D_pw^2 (capping )        
+        F_spread = -1 * D_batched_unit.transpose(0, 2, 1) * inv_D_pw_clamped_sqrd[:, :, np.newaxis]
+        # compute the sum of the spread forces
+        F_spread_sum = np.sum(F_spread, axis=0)
+        # normalize the spread forces
+        F_spread_sum = F_spread_sum / np.linalg.norm(F_spread_sum)
+        # scale the spread forces by mean spring force
+        F_spread_sum = spread_force_scale * F_spread_sum * np.mean(np.linalg.norm(F, axis=1))
+        F += F_spread_sum
+    return F, pe
+
+def step_physics(F, G, dt, mass, damping=0.5):
     """ 
     Perform physics step.
     
@@ -296,93 +240,111 @@ def step_physics(F, G, dt, mass, damping=0.1):
     np.ndarray
         The updated graph G.
     """
+    # compute kinetic energy
+    ke = 0.0
     # for each node, update the position
     for i in G.nodes:
-        damping_force = - damping * G.nodes[i]['vel']
-        total_force = F[i] + damping_force
+        ke += 0.5 * mass * np.linalg.norm(G.nodes[i]['vel'])**2
+        if np.linalg.norm(G.nodes[i]['vel']) < 1e-6:
+            damping_force_dir = np.zeros(3)
+        else:
+            damping_force_dir = -G.nodes[i]['vel'] / np.linalg.norm(G.nodes[i]['vel']) # unit vector
+        damping_force_mag = damping * np.linalg.norm(F[i])
+        total_force = F[i] + damping_force_mag * damping_force_dir
         a = total_force / mass
         G.nodes[i]['vel'] = G.nodes[i]['vel'] + a * dt
         G.nodes[i]['pos'] = G.nodes[i]['pos'] + G.nodes[i]['vel'] * dt
-    return G
+    return G, ke
 
-def update_adjacency_matrix(G, X):
+def update_adjacency_matrix(X, edge_mask):
     """ 
     Update the adjacency matrix of a graph G.
     
     Parameters
     ----------
-    G : nx.Graph
-        The input graph.
     X : np.ndarray
-        The positions of the nodes of
-        G in the embedding space.
+        The node positions.
+    edge_mask : np.ndarray
+        The edge mask.
     Returns
     -------
-    np.ndarray
+    A_new : np.ndarray
         The updated adjacency matrix of G.
+    D : np.ndarray
+        The pairwise distance matrix (for caching).
     """
-    n = len(G.nodes)
-    A_new = np.zeros((n, n))
-    for i, j in G.edges:
-        dist = np.linalg.norm(X[i] - X[j])
-        A_new[i, j] = dist
-        A_new[j, i] = dist
-    return A_new
+    # compute pairwise distances
+    D = metrics.pairwise_distances(X)
+    # create adjacency matrix
+    A_new = D * edge_mask
+    return A_new, D
 
-# loop
 
-def simulate(G_ann, A_orig, dt_min, mass, n_steps=10, render_freq=10, adaptive_dt=True, dt_max=0.1, return_frames=True):
+def simulate(
+        G_ann, 
+        A_orig, 
+        dt, 
+        mass=1, 
+        n_steps=10, 
+        n_frames=10, 
+        return_frames=True
+    ):
     """ 
     Simulate the physics of a graph.
     
     Parameters
     ----------
-    G : nx.Graph
+    G_ann : nx.Graph
         The input graph. The graph should have isorc annotation already.
-    A : np.ndarray
-        The adjacency matrix of G.
-    X : np.ndarray
-        The positions of the nodes of
-        G in the embedding space.
-    lda : float
-        The spring constant.
-    delta : float
-        The threshold distance.
-    dt_max : float
-        The max time step.
+    A_orig : np.ndarray
+        The adjacency matrix of G_ann.
+    dt : float
+        The time step size.
     mass : float
         The mass of the nodes.
     n_steps : int
         The number of steps to simulate.
+    n_frames : int
+        The number of frames to return.
+    return_frames : bool
+        Whether to return frames.
     Returns
     -------
-    nx.Graph
-        The updated graph G_ann.
+    G_ann : nx.Graph
+        The updated graph.
+    figs : list
+        The list of frames.
     """
-    dt = dt_min
+    edge_mask = np.where(A_orig > 0, 1, 0) # get edge mask
+    # get index map
     reversed_indices = np.array(np.argsort(G_ann.nodes))
+    # get initial positions
     X = np.array([G_ann.nodes[i]['pos'] for i in G_ann.nodes])[reversed_indices]
-    A = update_adjacency_matrix(G_ann, X)
-
+    # get initial adjacency matrix
+    A, D_pw = update_adjacency_matrix(X, edge_mask)
+    assert np.allclose(A, A_orig)
+    # annotate the graph with isorc
     sc_ind, D_G_prime = isorc_summary(G_ann)
-    # compute the equilibrium matrix
+    # compute the system equilibrium matrix
     E = equilibrium_matrix(sc_ind, D_G_prime, A_orig)
     if return_frames:
         figs = []
         figs.append(plot_graph_3D(X, G_ann, title=None))
-    en_max = 0
-    for step in range(n_steps):
-        F, en = compute_forces(E, G_ann, A, X, sc_ind) # compute forces and system energy
-        en_max = max(en, en_max)
-        if adaptive_dt and en < 0.5 * en_max:
-            dt = min(dt * 1.25, dt_max)
-            print(f"Adapting dt to {dt}")
-            en_max = 0
-        print(f"Step {step+1}: energy = {en}\n")
-        G_ann = step_physics(F, G_ann, dt, mass=mass)
-        X = np.array([G_ann.nodes[i]['pos'] for i in G_ann.nodes])[reversed_indices]
-        A = update_adjacency_matrix(G_ann, X)
-        # plot and update fig_dict
-        if step % render_freq == 0 and return_frames:
-            figs.append(plot_graph_3D(X, G_ann, title=None))
+    else:
+        figs = None
+    render_freq = n_steps // n_frames
+    # simulate the physics
+    with tqdm(total=n_steps) as pbar:
+        for step in range(n_steps):
+            F, pe = compute_forces_parallel(E, G_ann, A, X, sc_ind) # compute forces and system energy
+            G_ann, ke = step_physics(F, G_ann, dt, mass=mass)
+            X = np.array([G_ann.nodes[i]['pos'] for i in G_ann.nodes])[reversed_indices]
+            A, D_pw = update_adjacency_matrix(X, edge_mask)
+            # plot and update fig_dict
+            if step % render_freq == 0 and return_frames:
+                figs.append(plot_graph_3D(X, G_ann, title=None))
+            pbar.update(1)
+            # display energy on progress bar (not scientific notation)
+            en = pe + ke # total energy
+            pbar.set_postfix_str(f"Total Energy: {en:.2f}, Potential Energy: {pe:.2f}, Kinetic Energy: {ke:.2f}")
     return G_ann, figs
