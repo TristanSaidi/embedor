@@ -329,3 +329,60 @@ def plot_persistence_diagram(dgms, thresh=None, exp_name=None, filename=None):
         os.makedirs(exp_dir, exist_ok=True)
         path = os.path.join(exp_dir, filename)
         plt.savefig(path)
+
+
+class animation:
+
+    def configure_buttons(fig):
+        """ 
+        Configure the buttons for the plot.
+        """
+        fig["layout"]["updatemenus"] = [
+            {
+                "buttons": [
+                    {
+                        "args": [None, {"frame": {"duration": 500, "redraw": False},
+                                        "fromcurrent": True, "transition": {"duration": 300,
+                                                                            "easing": "quadratic-in-out"}}],
+                        "label": "Play",
+                        "method": "animate"
+                    },
+                    {
+                        "args": [[None], {"frame": {"duration": 0, "redraw": False},
+                                        "mode": "immediate",
+                                        "transition": {"duration": 0}}],
+                        "label": "Pause",
+                        "method": "animate"
+                    }
+                ],
+                "direction": "left",
+                "pad": {"r": 10, "t": 87},
+                "showactive": False,
+                "type": "buttons",
+                "x": 0.1,
+                "xanchor": "right",
+                "y": 0,
+                "yanchor": "top"
+            }
+        ]
+        return fig
+    
+    def config_slider():
+        sliders_dict = {
+            "active": 0,
+            "yanchor": "top",
+            "xanchor": "left",
+            "currentvalue": {
+                "font": {"size": 20},
+                "prefix": "timestep:",
+                "visible": True,
+                "xanchor": "right"
+            },
+            "transition": {"duration": 300, "easing": "cubic-in-out"},
+            "pad": {"b": 10, "t": 50},
+            "len": 0.9,
+            "x": 0.1,
+            "y": 0,
+            "steps": []
+        }
+        return sliders_dict

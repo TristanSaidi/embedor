@@ -3,7 +3,7 @@ from src.manifold import *
 import numpy as np
 # Data generation functions
 
-def concentric_circles(n_points, factor, noise, supersample=False, supersample_factor=2.5, noise_thresh=0.275):
+def concentric_circles(n_points, factor, noise, supersample=False, supersample_factor=2.5, noise_thresh=0.275, dim=2):
     """ 
     Generate concentric circles with noise. 
     Parameters
@@ -43,7 +43,9 @@ def concentric_circles(n_points, factor, noise, supersample=False, supersample_f
         cluster = cluster[subsample_indices]
     else:
         circles_supersample = None
-    
+    # if dim = 3, add a third dimension of zeros
+    if dim == 3:
+        circles = np.concatenate([circles, np.zeros((circles.shape[0], 1))], axis=1)
     # clip noise and resample if necessary
     z =  noise*np.random.randn(*circles.shape)
     resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
