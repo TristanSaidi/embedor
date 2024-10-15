@@ -3,6 +3,7 @@ import numpy as np
 import numpy as np
 from src.orcml import *
 from src.graph_utils import *
+from src.plotting import *
 
 def isorc_annotate(G, lda=0.01, delta=0.8, verbose=False):
     """
@@ -327,3 +328,61 @@ def update_adjacency_matrix(G, X):
         A_new[i, j] = dist
         A_new[j, i] = dist
     return A_new
+
+# loop
+
+def simulate(G_ann, A_orig, dt_min, mass, n_steps=10, render_freq=10, adaptive_dt=True, dt_max=0.1, return_frames=True):
+    """ 
+    Simulate the physics of a graph.
+    
+    Parameters
+    ----------
+    G : nx.Graph
+        The input graph. The graph should have isorc annotation already.
+    A : np.ndarray
+        The adjacency matrix of G.
+    X : np.ndarray
+        The positions of the nodes of
+        G in the embedding space.
+    lda : float
+        The spring constant.
+    delta : float
+        The threshold distance.
+    dt_max : float
+        The max time step.
+    mass : float
+        The mass of the nodes.
+    n_steps : int
+        The number of steps to simulate.
+    Returns
+    -------
+    nx.Graph
+        The updated graph G_ann.
+    """
+    dt = dt_min
+    reversed_indices = np.array(np.argsort(G_ann.nodes))
+    X = np.array([G_ann.nodes[i]['pos'] for i in G_ann.nodes])[reversed_indices]
+    A = update_adjacency_matrix(G_ann, X)
+
+    sc_ind, D_G_prime = isorc_summary(G_ann)
+    # compute the equilibrium matrix
+    E = equilibrium_matrix(sc_ind, D_G_prime, A_orig)
+    if return_frames:
+        figs = []
+        figs.append(plot_graph_3D(X, G_ann, title=None))
+    en_max = 0
+    for step in range(n_steps):
+        F, en = compute_forces(E, G_ann, A, X, sc_ind) # compute forces and system energy
+        en_max = max(en, en_max)
+        if adaptive_dt and en < 0.5 * en_max:
+            dt = min(dt * 1.25, dt_max)
+            print(f"Adapting dt to {dt}")
+            en_max = 0
+        print(f"Step {step+1}: energy = {en}\n")
+        G_ann = step_physics(F, G_ann, dt, mass=mass)
+        X = np.array([G_ann.nodes[i]['pos'] for i in G_ann.nodes])[reversed_indices]
+        A = update_adjacency_matrix(G_ann, X)
+        # plot and update fig_dict
+        if step % render_freq == 0 and return_frames:
+            figs.append(plot_graph_3D(X, G_ann, title=None))
+    return G_ann, figs
