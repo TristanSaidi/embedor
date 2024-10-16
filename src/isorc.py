@@ -323,8 +323,8 @@ def simulate(
     -------
     G_ann : nx.Graph
         The updated graph.
-    figs : list
-        The list of frames.
+    frames : dict
+        The dict of frames.
     """
     edge_mask = np.where(A_orig > 0, 1, 0) # get edge mask
     # get index map
@@ -339,10 +339,13 @@ def simulate(
     # compute the system equilibrium matrix
     E = equilibrium_matrix(sc_ind, D_G_prime, A_orig)
     if return_frames:
-        figs = []
-        figs.append(plot_graph_3D(X, G_ann, title=None))
+        # figs = []
+        # figs.append(plot_graph_3D(X, G_ann, title=None))
+        Xs = [X]
+        Gs = [G_ann]
     else:
-        figs = None
+        Xs = None
+        Gs = None
     render_freq = n_steps // n_frames
     # simulate the physics
     with tqdm(total=n_steps) as pbar:
@@ -353,9 +356,14 @@ def simulate(
             A, D_pw = update_adjacency_matrix(X, edge_mask)
             # plot and update fig_dict
             if step % render_freq == 0 and return_frames:
-                figs.append(plot_graph_3D(X, G_ann, title=None))
+                Xs.append(X)
+                Gs.append(G_ann)
             pbar.update(1)
             # display energy on progress bar (not scientific notation)
             en = pe + ke # total energy
             pbar.set_postfix_str(f"Total Energy: {en:.2f}, Potential Energy: {pe:.2f}, Kinetic Energy: {ke:.2f}")
-    return G_ann, figs
+    frames = {
+        "Xs": Xs,
+        "Gs": Gs
+    }
+    return G_ann, frames
