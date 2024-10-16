@@ -141,7 +141,18 @@ def equilibrium_matrix(sc_ind, D_G_prime, A, dist_scale=1.0):
     E = np.maximum(A, sc_ind * D_G_prime * dist_scale)
     return E
 
-def compute_forces_parallel(E, G, A, X, sc_ind, k=5, k_sc=0.1, encourge_spread=True, D_pw=None, spread_force_scale=0.1):
+def compute_forces_parallel(
+        E, 
+        G, 
+        A, 
+        X, 
+        sc_ind, 
+        k=5, 
+        k_sc=0.1, 
+        encourge_spread=True, 
+        D_pw=None, 
+        spread_force_scale=0.1
+    ):
     """ 
     Compute the forces on the nodes of the graph using a vectorized implementation.
     Parameters
@@ -213,7 +224,7 @@ def compute_forces_parallel(E, G, A, X, sc_ind, k=5, k_sc=0.1, encourge_spread=T
         # compute the sum of the spread forces
         F_spread_sum = np.sum(F_spread, axis=0)
         # normalize the spread forces
-        F_spread_sum = F_spread_sum / np.linalg.norm(F_spread_sum)
+        F_spread_sum = F_spread_sum / np.linalg.norm(F_spread_sum, axis=1)[:, np.newaxis]
         # scale the spread forces by mean spring force
         F_spread_sum = spread_force_scale * F_spread_sum * np.mean(np.linalg.norm(F, axis=1))
         F += F_spread_sum
@@ -336,7 +347,7 @@ def simulate(
     # simulate the physics
     with tqdm(total=n_steps) as pbar:
         for step in range(n_steps):
-            F, pe = compute_forces_parallel(E, G_ann, A, X, sc_ind) # compute forces and system energy
+            F, pe = compute_forces_parallel(E, G_ann, A, X, sc_ind, D_pw=D_pw) # compute forces and system energy        
             G_ann, ke = step_physics(F, G_ann, dt, mass=mass)
             X = np.array([G_ann.nodes[i]['pos'] for i in G_ann.nodes])[reversed_indices]
             A, D_pw = update_adjacency_matrix(X, edge_mask)
