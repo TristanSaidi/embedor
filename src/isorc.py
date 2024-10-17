@@ -119,7 +119,7 @@ def isorc_summary(G):
         D_G_prime[v, u] = d
     return sc_ind, D_G_prime
 
-def equilibrium_matrix(sc_ind, D_G_prime, A, dist_scale=1.0):
+def equilibrium_matrix(sc_ind, D_G_prime, A, dist_scale=1.0, repulsion=False):
     """
     Compute the spring equilibrium matrix for the isorc embedding.
     Parameters
@@ -139,6 +139,9 @@ def equilibrium_matrix(sc_ind, D_G_prime, A, dist_scale=1.0):
     """
     # create the equilibrium matrix as element-wise maximum of A and sc_ind * D_G_prime
     E = np.maximum(A, sc_ind * D_G_prime * dist_scale)
+    if repulsion:
+        # flip sign of shortcut edges
+        E = np.where(sc_ind == 1, -1 * E, E)
     return E
 
 def compute_forces_parallel(
@@ -149,9 +152,10 @@ def compute_forces_parallel(
         sc_ind, 
         k=5, 
         k_sc=0.1, 
-        encourge_spread=True, 
+        encourge_spread=False, 
         D_pw=None, 
-        spread_force_scale=0.01
+        spread_force_scale=0.01,
+        max_force_mag=1,
     ):
     """ 
     Compute the forces on the nodes of the graph using a vectorized implementation.
@@ -189,6 +193,8 @@ def compute_forces_parallel(
     mask = np.where(A > 0, 1, 0) # N x N
     # combine mask and D_eq with element-wise multiplication
     D_eq_masked = D_eq * mask # N x N
+    # clip D_eq_masked to be within 2 standard deviations of the mean
+    D_eq_masked = np.clip(D_eq_masked, -100 * np.std(D_eq_masked) + np.mean(D_eq_masked), 100 * np.std(D_eq_masked) + np.mean(D_eq_masked))
     # create spring constant matrix
     # k for good edges, k_sc for shortcuts
     # sc_ind is N x N. 
@@ -301,6 +307,25 @@ class AdaGrad(object):
     def update(self, grad):
         self.grad_sq_sum += grad**2
         return grad / (np.sqrt(self.grad_sq_sum) + self.eps)
+    
+class adaptive_timestep(object):
+    def __init__(self, dt, adaptive=False, ema_alpha=0.9):
+        self.dt = dt
+        self.adaptive = adaptive
+        self.ema_alpha = ema_alpha
+        self.F_mag_max = 0
+
+    def update(self, F):
+        if not self.adaptive:
+            return self.dt
+        total_force_mag = np.sum(np.linalg.norm(F, axis=1))
+        self.F_mag_max = (1-self.ema_alpha)*max(self.F_mag_max, total_force_mag) + self.ema_alpha*self.F_mag_max
+        ratio = np.sqrt(self.F_mag_max / total_force_mag)
+        dt_prime = self.dt * ratio
+        self.dt = (1-self.ema_alpha) * dt_prime + self.ema_alpha * self.dt
+        return self.dt
+
+
 
 def step_physics(F, G, dt, mass, optimizer, damping=0.5):
     """ 
@@ -338,7 +363,15 @@ def step_physics(F, G, dt, mass, optimizer, damping=0.5):
         G.nodes[i]['pos'] = G.nodes[i]['pos'] + G.nodes[i]['vel'] * dt
     return G, ke
 
-def step_physics_vectorized(F, G, dt, mass, optimizer, damping=0.5):
+def step_physics_vectorized(
+        F, 
+        G, 
+        dt, 
+        mass, 
+        optimizer, 
+        damping=0.5, 
+        max_force_mag=0.1
+    ):
     """ 
     Perform physics step.
     
@@ -362,18 +395,24 @@ def step_physics_vectorized(F, G, dt, mass, optimizer, damping=0.5):
     # extract node positions and velocities
     pos = np.array([G.nodes[i]['pos'] for i in range(len(G.nodes))])
     vel = np.array([G.nodes[i]['vel'] for i in range(len(G.nodes))])
+
+    # clip forces such that the magnitude of the force is at most max_force_mag
+    if max_force_mag is not None:
+        F_norm = np.linalg.norm(F, axis=1)
+        F = np.where((F_norm > max_force_mag)[: , np.newaxis], F / F_norm[:, np.newaxis] * max_force_mag , F)
+
     # compute damping forces
     damping_force = compute_damping_vectorized(F, vel, damping)
     # compute total forces
     total_force = F + damping_force
     # compute update
-    total_force = optimizer.update(total_force)
+    # total_force = optimizer.update(total_force)
     # compute acceleration
     a = total_force / mass
     # update velocity
-    vel = vel + a * dt
+    # vel = vel + a * dt
     # update position
-    pos = pos + vel * dt
+    pos = pos + a * dt
     # compute kinetic energy
     ke = 0.5 * mass * np.sum(np.linalg.norm(vel, axis=1)**2)
     # update graph
@@ -488,11 +527,37 @@ def simulate(
         Xs = None
         Gs = None
     render_freq = n_steps // n_frames
+    
+    F, pe = compute_forces_parallel(
+        E, 
+        G_ann, 
+        A, 
+        X, 
+        sc_ind, 
+        D_pw=D_pw
+    ) # compute forces and system energy     
+    timestepper = adaptive_timestep(dt, adaptive=adaptive_dt, ema_alpha=ema_alpha)
     # simulate the physics
     with tqdm(total=n_steps) as pbar:
         for step in range(n_steps):
-            F, pe = compute_forces_parallel(E, G_ann, A, X, sc_ind, D_pw=D_pw) # compute forces and system energy        
-            G_ann, ke = step_physics_vectorized(F, G_ann, dt, optimizer=optimizer, mass=mass)
+            F, pe = compute_forces_parallel(
+                E, 
+                G_ann, 
+                A, 
+                X, 
+                sc_ind, 
+                D_pw=D_pw
+            ) # compute forces and system energy
+            
+            dt = timestepper.update(F)
+            G_ann, ke = step_physics_vectorized(
+                F, 
+                G_ann, 
+                dt, 
+                optimizer=optimizer, 
+                mass=mass,
+            )
+
             X = np.array([G_ann.nodes[i]['pos'] for i in G_ann.nodes])[reversed_indices]
             A, D_pw = update_adjacency_matrix(X, edge_mask)
             # plot and update fig_dict
