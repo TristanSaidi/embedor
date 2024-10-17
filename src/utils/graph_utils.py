@@ -60,60 +60,6 @@ def compute_eff_eps_adj(A, n_neighbors, edge):
     effective_eps = max(effective_eps_i, effective_eps_j)
     return effective_eps
 
-
-def make_prox_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
-    """
-    Create a proximity graph from a dataset.
-    Parameters
-    ----------
-    X : array-like, shape (n_samples, n_features)
-        The dataset.
-    mode : str, optional
-        The mode of the graph construction. Either 'nbrs' or 'eps'.
-    n_neighbors : int, optional
-        The number of neighbors to consider when mode='nbrs'.
-    epsilon : float, optional
-        The epsilon parameter when mode='eps'.
-    Returns
-    -------
-    G : networkx.Graph
-        The proximity graph.
-    """
-    
-    if mode == 'nbrs':
-        assert n_neighbors is not None, "n_neighbors must be specified when mode='nbrs'."
-        A = neighbors.kneighbors_graph(X, n_neighbors=n_neighbors, mode='distance')
-    elif mode == 'eps':
-        assert epsilon is not None, "epsilon must be specified when mode='eps'."
-        A = neighbors.radius_neighbors_graph(X, radius=epsilon, mode='distance')
-    else:
-        raise ValueError("Invalid mode. Choose 'nbrs' or 'eps'.")
-    # symmetrize the adjacency matrix
-    A = np.maximum(A.toarray(), A.toarray().T)
-    assert np.allclose(A, A.T), "The adjacency matrix is not symmetric."
-    # convert to networkx graph and symmetrize A
-    n_points = X.shape[0]
-    nodes = set()
-    G = nx.Graph()
-    for i in range(n_points):
-        G.add_node(i)
-        G.nodes[i]['pos'] = X[i] # store the position of the node
-        G.nodes[i]['vel'] = np.zeros(X.shape[1]) # store the velocity of the node
-        for j in range(i+1, n_points):
-            if A[i, j] > 0:
-                G.add_edge(i, j, weight=A[i, j]) # weight is the euclidean distance
-                if mode == 'eps':
-                    G[i][j]['effective_eps'] = epsilon
-                else: # estimate effective epsilon as the average of the k-nearest neighbors
-                    effective_eps = compute_eff_eps_adj(A, n_neighbors, (i, j))
-                    G[i][j]['effective_eps'] = effective_eps
-                nodes.add(i)
-                nodes.add(j)
-
-    assert G.is_directed() == False, "The graph is directed."
-    assert len(G.nodes()) == n_points, "The graph has isolated nodes."
-    return G, A
-
 def compute_orc(G):
     """
     Compute the Ollivier-Ricci curvature on edges of a graph.
@@ -265,10 +211,64 @@ def get_nn_graph(data, exp_params):
     return_dict : dict
     """
     if exp_params['mode'] == 'nbrs':
-        G, A = make_prox_graph(data, mode=exp_params['mode'], n_neighbors=exp_params['n_neighbors']) # unpruned k-nn graph
+        G, A = _get_nn_graph(data, mode=exp_params['mode'], n_neighbors=exp_params['n_neighbors']) # unpruned k-nn graph
     else:
-        G, A = make_prox_graph(data, mode=exp_params['mode'], epsilon=exp_params['epsilon'])
+        G, A = _get_nn_graph(data, mode=exp_params['mode'], epsilon=exp_params['epsilon'])
     return {
         "G": G,
         "A": A,
     }
+
+
+def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
+    """
+    Create a proximity graph from a dataset.
+    Parameters
+    ----------
+    X : array-like, shape (n_samples, n_features)
+        The dataset.
+    mode : str, optional
+        The mode of the graph construction. Either 'nbrs' or 'eps'.
+    n_neighbors : int, optional
+        The number of neighbors to consider when mode='nbrs'.
+    epsilon : float, optional
+        The epsilon parameter when mode='eps'.
+    Returns
+    -------
+    G : networkx.Graph
+        The proximity graph.
+    """
+    
+    if mode == 'nbrs':
+        assert n_neighbors is not None, "n_neighbors must be specified when mode='nbrs'."
+        A = neighbors.kneighbors_graph(X, n_neighbors=n_neighbors, mode='distance')
+    elif mode == 'eps':
+        assert epsilon is not None, "epsilon must be specified when mode='eps'."
+        A = neighbors.radius_neighbors_graph(X, radius=epsilon, mode='distance')
+    else:
+        raise ValueError("Invalid mode. Choose 'nbrs' or 'eps'.")
+    # symmetrize the adjacency matrix
+    A = np.maximum(A.toarray(), A.toarray().T)
+    assert np.allclose(A, A.T), "The adjacency matrix is not symmetric."
+    # convert to networkx graph and symmetrize A
+    n_points = X.shape[0]
+    nodes = set()
+    G = nx.Graph()
+    for i in range(n_points):
+        G.add_node(i)
+        G.nodes[i]['pos'] = X[i] # store the position of the node
+        G.nodes[i]['vel'] = np.zeros(X.shape[1]) # store the velocity of the node
+        for j in range(i+1, n_points):
+            if A[i, j] > 0:
+                G.add_edge(i, j, weight=A[i, j]) # weight is the euclidean distance
+                if mode == 'eps':
+                    G[i][j]['effective_eps'] = epsilon
+                else: # estimate effective epsilon as the average of the k-nearest neighbors
+                    effective_eps = compute_eff_eps_adj(A, n_neighbors, (i, j))
+                    G[i][j]['effective_eps'] = effective_eps
+                nodes.add(i)
+                nodes.add(j)
+
+    assert G.is_directed() == False, "The graph is directed."
+    assert len(G.nodes()) == n_points, "The graph has isolated nodes."
+    return G, A
