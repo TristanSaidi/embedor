@@ -84,33 +84,6 @@ def _get_single_node_neighbors_distributions(src, target, direction="successors"
         neighbors.remove(target)
     assert target not in neighbors, "Target needs to be excluded from neighbors."
 
-    # # Get sum of distributions from x's all neighbors
-    # heap_weight_node_pair = []
-    # for nbr in neighbors:
-    #     if direction == "predecessors":
-    #         w = _base ** (-_Gk.weight(nbr, node) ** _exp_power)
-    #     else:  # successors
-    #         w = _base ** (-_Gk.weight(node, nbr) ** _exp_power)
-
-    #     if len(heap_weight_node_pair) < _nbr_topk:
-    #         heapq.heappush(heap_weight_node_pair, (w, nbr))
-    #     else:
-    #         heapq.heappushpop(heap_weight_node_pair, (w, nbr))
-
-    # nbr_edge_weight_sum = sum([x[0] for x in heap_weight_node_pair])
-    # if not neighbors:
-    #     # No neighbor, all mass stay at node
-    #     return [1], [node]
-
-    # if nbr_edge_weight_sum > EPSILON:
-    #     # Sum need to be not too small to prevent divided by zero
-    #     distributions = [(1.0 - _alpha) * w / nbr_edge_weight_sum for w, _ in heap_weight_node_pair]
-    # else:
-    #     # Sum too small, just evenly distribute to every neighbors
-    #     logger.warning("Neighbor weight sum too small, list:", heap_weight_node_pair)
-    #     distributions = [(1.0 - _alpha) / len(heap_weight_node_pair)] * len(heap_weight_node_pair)
-
-    # nbr = [x[1] for x in heap_weight_node_pair]
     distributions = [1/len(neighbors)] * len(neighbors) # uniform over all neighbors
     nbr = neighbors
     return distributions, nbr

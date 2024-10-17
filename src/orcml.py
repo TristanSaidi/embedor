@@ -2,174 +2,25 @@ import networkx as nx
 import numpy as np
 from src.graph_utils import *
 
-def prune_orcml(G, X, eps, lda, delta=0.8, verbose=False, reattach=True):
-    """
-    Prune the graph with the orcml method.
-    Parameters
-    ----------
-    G : networkx.Graph
-        The graph to prune.
-    X : array-like, shape (n_samples, n_features)
-        The dataset.
-    eps : float
-        The epsilon parameter for the proximity graph.
-    lda : float
-        The lambda parameter for pruning (see paper).
-    delta : float, optional
-        The delta (confidence) parameter for pruning (see paper).
-    Returns
-    -------
-    G_pruned : networkx.Graph
-        The pruned graph.
-    """    
-    # construct the candidate set C, and filtered graph G'
-    C = []
-    G_prime = nx.Graph()
-    threshold = -1 + 4*(1-delta)
-    candidate_edge_indices = []
-    for idx, (i, j, d) in enumerate(G.edges(data=True)):
-        if d['ricciCurvature'] < threshold:
-            C.append((i,j))
-            candidate_edge_indices.append(idx)
-        else:
-            G_prime.add_edge(i, j, weight=d["weight"])
-            G_prime[i][j]['ricciCurvature'] = d['ricciCurvature']
-            G_prime[i][j]['effective_eps'] = d['effective_eps']
-    
-    if verbose:
-        print(f"Number of candidate edges: {len(C)}, Number of edges in G': {len(G.edges())}")
-    # bookkeeping
-    num_removed_edges = 0
+shortcut_str = "Shortcut Edge Detected: edge {num}\n d_G'(x,y)/effective_eps: {emp_ratio}\n Threshold/effective_eps: {theo_ratio}\n\n"
 
-    G_pruned = G_prime.copy()
-    preserved_nodes = set(G_prime.nodes()) # start from G' and add nodes as we go
-    preserved_edges = list(range(len(G.edges()))) # start from all edges and remove as we go
+default_exp_params = {
+    'mode': 'nbrs',
+    'n_neighbors': 20,
+    'epsilon': None,
+    'lda': 0.01,
+    'delta': 0.8
+}
 
-    for num, (i, j) in enumerate(C):
-        # check distance d_G'(x,y) for all x,y in C
-        threshold = ((1-lda)*np.pi**2)/(2*np.sqrt(24*lda))
+# create ORCManL class
+class ORCManL(object):
 
-        if eps is not None:
-            threshold *= eps
-        else:
-            # find the edge distance for all edges incident to i or j
-            dists = []
-            for k in G.neighbors(i):
-                dists.append(G[i][k]['weight'])
-            for k in G.neighbors(j):
-                dists.append(G[j][k]['weight'])
-            effective_eps = np.mean(dists)
-            threshold *= effective_eps
-
-        if i not in G_prime.nodes() or j not in G_prime.nodes():
-            continue
-        try:
-            d_G_prime = nx.shortest_path_length(G_prime, source=i, target=j, weight="weight") # use euclidean distance
-        except nx.NetworkXNoPath:
-            d_G_prime = np.inf
-
-        if d_G_prime > threshold:
-            num_removed_edges += 1
-            preserved_edges.remove(candidate_edge_indices[num])
-            if verbose:
-                print(f"Removing Edge {num}: {i} - {j}")
-                # print the ratio of d_G'(x,y) to eps
-                if eps is not None:
-                    print(f"d_G'(x,y)/eps: {d_G_prime/eps}")
-                    print(f"Threshold/eps: {threshold/eps}")
-                else:
-                    print(f"d_G'(x,y)/effective_eps: {d_G_prime/effective_eps}")
-                    print(f"Threshold/effective_eps: {threshold/effective_eps}")
-                print()
-        else:
-            G_pruned.add_node(i)
-            G_pruned.add_node(j)
-            G_pruned.add_edge(i, j, weight=G[i][j]["weight"])
-            G_pruned[i][j]['ricciCurvature'] = G[i][j]['ricciCurvature']
-            G_pruned[i][j]['effective_eps'] = G[i][j]['effective_eps']
-        
-            preserved_nodes.add(i)
-            preserved_nodes.add(j)
-
-    if len(preserved_nodes) != len(G.nodes()) and reattach:
-        print("Warning: There are isolated nodes in the graph. This will be artificially fixed.")
-        print(f"Number of isolated nodes: {len(G.nodes()) - len(preserved_nodes)}")
-        missing_nodes = set(G.nodes()).difference(preserved_nodes)
-        for node_idx in missing_nodes:
-            # find nearest neighbor
-            isolated_node = X[node_idx]
-            dists = np.linalg.norm(X - isolated_node, axis=1)
-            dists[node_idx] = np.inf
-            nearest_neighbor = np.argmin(dists)
-            G_pruned.add_edge(node_idx, nearest_neighbor, weight=dists[nearest_neighbor])
-            # assign this edge 0 curvature
-            G_pruned[node_idx][nearest_neighbor]['ricciCurvature'] = 0
-        assert len(G.nodes()) == len(G_pruned.nodes()), "The number of preserved nodes does not match the number of nodes in the pruned graph."
-
-    preserved_orcs = []
-    for i, j, d in G_pruned.edges(data=True):
-        preserved_orcs.append(d['ricciCurvature'])
-    G_prime_orcs = []
-    for i, j, d in G_prime.edges(data=True):
-        G_prime_orcs.append(d['ricciCurvature'])
-    A_pruned = nx.adjacency_matrix(G_pruned).toarray()
-    return {
-        'G_pruned': G_pruned,
-        'G_prime': G_prime,
-        'A_pruned': A_pruned,
-        'preserved_edges': preserved_edges,
-        'preserved_orcs': preserved_orcs,
-        'G_prime_orcs': G_prime_orcs,
-        'preserved_nodes': preserved_nodes,
-        'C': C,
-    }
-            
-
-def get_pruned_unpruned_graph(data, exp_params, verbose=False, reattach=True):
-    """ 
-    Build the nearest neighbor graph and prune it with the orcml method.
-    Parameters
-    ----------
-    data : array-like, shape (n_samples, n_features)
-        The dataset.
-    exp_params : dict
-        The experimental parameters.
-    verbose : bool, optional
-        Whether to print verbose output for orcml algorithm.
-    reattach : bool, optional
-        Whether to reattach isolated nodes.
-    Returns
-    -------
-    return_dict : dict
-    """
-
-    return_dict = get_nn_graph(data, exp_params)
-    G, A = return_dict['G'], return_dict['A']
-    return_dict = compute_orc(G)
-    orcs = return_dict['orcs']
-    pruned_orcml = prune_orcml(return_dict['G'], data, eps=exp_params['epsilon'], lda=exp_params['lda'], delta=exp_params['delta'], verbose=verbose, reattach=reattach)
-    G_orcml = pruned_orcml['G_pruned']
-    A_orcml = nx.adjacency_matrix(G_orcml).toarray()
-    # symmetrize
-    A_orcml = np.maximum(A_orcml, A_orcml.T)
-    return {
-        "G_original": G,
-        "A_original": A,
-        "G_orcml": G_orcml,
-        "A_orcml": A_orcml,
-        "preserved_edges": pruned_orcml['preserved_edges'],
-        "G_orc": return_dict['G'], # unpruned graph with annotated orc
-        "G_prime": pruned_orcml['G_prime'], # orc pruned graph without validation step
-        "G_prime_orcs": pruned_orcml['G_prime_orcs'],
-        "orcs": orcs,
-        "C": pruned_orcml['C'],
-    }
-
-# create ORCML class
-
-class ORCManL:
-
-    def __init__(self, exp_params, verbose=False, reattach=True):
+    def __init__(
+            self, 
+            exp_params=default_exp_params, 
+            verbose=False, 
+            reattach=True
+        ):
         """ 
         Initialize the ORCML class.
         Parameters
@@ -188,8 +39,53 @@ class ORCManL:
             self.exp_params['n_neighbors'] = None
         self.verbose = verbose
         self.reattach = reattach
+        self._setup_structs()
+        self._setup_thresholds()
 
-    def fit(self, data):
+    def _setup_structs(self):
+        """
+        Setup data structures for the ORCManL algorithm.
+        """
+        # data
+        self.X = None
+        # NN-graph
+        self.G = None # original nn-graph
+        self.A = None # adjacency matrix of original nn-graph
+        # list of Ollivier-Ricci curvatures
+        self.orcs = None
+        # Pruned graph
+        self.C = None # candidate set
+        self.C_indices = None # indices of candidate edges
+        self.G_prime = None # thresholded nn-graph
+        self.G_pruned = None # pruned nn-graph
+        self.A_pruned = None # adjacency matrix of pruned nn-graph
+        self.non_shortcut_edges = None # indices of non-shortcut edges
+        self.shortcut_edges = None # indices of shortcut edges
+        # Annotated graph
+        self.G_ann = None
+
+    def _setup_thresholds(self):
+        """
+        Compute the thresholds for pruning specified by the ORCManL algorithm.
+        """
+        self.orc_threshold = -1 + 4*(1-self.exp_params['delta'])
+        self.dist_threshold = ((1-self.exp_params['lda'])*np.pi**2)/(2*np.sqrt(24*self.exp_params['lda']))
+
+    def build_nnG(self):
+        """
+        Build the nearest neighbor graph and compute ORC for each edge.
+        """
+        if self.X is None or (self.A is not None and self.G is not None):
+            raise ValueError("Data must be provided to build the nearest neighbor graph.")
+        return_dict = get_nn_graph(self.X, self.exp_params)
+        G = return_dict['G']
+        self.A = return_dict['A']
+        # compute ORC
+        return_dict = compute_orc(G)
+        self.G = return_dict['G']
+        self.orcs = return_dict['orcs']
+
+    def fit(self, data, return_self=False):
         """
         Build nearest neighbor graph of data and apply the ORCManL algorithm.
         Parameters
@@ -200,11 +96,117 @@ class ORCManL:
         -------
         self : ORCManL
         """
-        self.return_dict = get_pruned_unpruned_graph(data, self.exp_params, verbose=self.verbose, reattach=self.reattach)
-        self.G_pruned = self.return_dict['G_orcml']
-        self.A_pruned = self.return_dict['A_orcml']
-        return
-    
+        self.X = data
+        self.build_nnG()
+        self._fit()
+        if return_self:
+            return self
+            
+    def _fit(self):
+        """ 
+        Run the ORCManL algorithm.
+        """
+        self.C = []
+        self._construct_C()
+        if self.verbose:
+            print(f"Number of candidate edges: {len(self.C)}, Number of edges in G': {len(self.G.edges())}")
+        self._validate_and_prune()
+        self._reattach_isolated_nodes()
+        self.A_pruned = self._create_A(self.G_pruned)
+
+    def _construct_C(self):
+        """
+        Construct the candidate set C.
+        """
+        self.G_prime = nx.Graph()
+        self.C_indices = []
+        for idx, (i, j, d) in enumerate(self.G.edges(data=True)):
+            if d['ricciCurvature'] < self.orc_threshold:
+                self.C.append((i,j))
+                self.C_indices.append(idx)
+            else:
+                self.G_prime.add_edge(i, j, weight=d["weight"])
+                self.G_prime[i][j]['ricciCurvature'] = d['ricciCurvature']
+                self.G_prime[i][j]['effective_eps'] = d['effective_eps']
+
+    def _validate_and_prune(self):
+        """
+        Validation step for the ORCManL algorithm.
+        """
+        self.G_ann = self.G.copy()
+        self.G_pruned = self.G_prime.copy()
+        self.non_shortcut_edges = list(range(len(self.G.edges()))) # start from all edges and remove as we go
+        self.shortcut_edges = [] # start empty and add as we go
+
+        # iterate over candidate set
+        for num, (i, j) in enumerate(self.C):
+            # get epsilon
+            effective_eps = self.G[i][j]['effective_eps']
+            # check distance d_G'(i,j)
+            threshold = self.dist_threshold * effective_eps
+            if i not in self.G_prime.nodes() or j not in self.G_prime.nodes():
+                continue
+            try:
+                d_G_prime = nx.shortest_path_length(self.G_prime, source=i, target=j, weight="weight")
+            except nx.NetworkXNoPath:
+                d_G_prime = np.inf
+            # adjust G_ann
+            self.G_ann[i][j]['G_prime_dist'] = d_G_prime
+            if d_G_prime > threshold:
+                self._remove_edge(num, i, j)
+                if self.verbose:
+                    print(shortcut_str.format(num=num, emp_ratio=d_G_prime/effective_eps, theo_ratio=threshold/effective_eps))
+            else:
+                self._preserve_edge(i, j)
+            
+    def _remove_edge(self, num, i, j):
+        """ 
+        Remove an edge from the graph.
+        """
+        self.non_shortcut_edges.remove(self.C_indices[num])
+        self.shortcut_edges.append(self.C_indices[num])
+        self.G_ann[i][j]['shortcut'] = 1
+
+    def _preserve_edge(self, i, j):
+        """ 
+        Preserve an edge in the graph.
+        """
+        self.G_pruned.add_node(i)
+        self.G_pruned.add_node(j)
+        self.G_pruned.add_edge(i, j, weight=self.G[i][j]["weight"])
+        self.G_pruned[i][j]['ricciCurvature'] = self.G[i][j]['ricciCurvature']
+        self.G_pruned[i][j]['effective_eps'] = self.G[i][j]['effective_eps']
+
+    def _reattach_isolated_nodes(self):
+        """
+        Reattach isolated nodes.
+        """
+        if not self.reattach:
+            return
+        if len(self.G_pruned.nodes()) != len(self.G.nodes()):
+            print("Warning: There are isolated nodes in the graph. This will be artificially fixed.")
+            print(f"Number of isolated nodes: {len(self.G.nodes()) - len(self.G_pruned.nodes())}")
+            missing_nodes = set(self.G.nodes()).difference(self.G_pruned.nodes())
+            for node_idx in missing_nodes:
+                # find nearest neighbor
+                isolated_node = self.X[node_idx]
+                dists = np.linalg.norm(self.X - isolated_node, axis=1)
+                dists[node_idx] = np.inf
+                nearest_neighbor = np.argmin(dists)
+                self.G_pruned.add_edge(node_idx, nearest_neighbor, weight=dists[nearest_neighbor])
+                # assign this edge 0 curvature
+                self.G_pruned[node_idx][nearest_neighbor]['ricciCurvature'] = 0
+
+    def _create_A(self, G):
+        """
+        Create the adjacency matrix of the pruned graph.
+        """
+        A = nx.adjacency_matrix(G).toarray()
+        # symmetrize the adjacency matrix
+        A = np.maximum(A, A.T)
+        assert np.allclose(A, A.T), "The adjacency matrix is not symmetric."
+        return A
+
     def get_pruned_graph(self):
         """
         Get the pruned graph.
@@ -214,3 +216,13 @@ class ORCManL:
             The pruned graph.
         """
         return self.G_pruned
+    
+    def get_annotated_graph(self):
+        """
+        Get the annotated graph.
+        Returns
+        -------
+        G_ann : networkx.Graph
+            The annotated graph.
+        """
+        return self.G_ann
