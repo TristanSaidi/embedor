@@ -1,6 +1,6 @@
 import networkx as nx
 import numpy as np
-from src.graph_utils import *
+from src.utils.graph_utils import *
 
 shortcut_str = "Shortcut Edge Detected: edge {num}\n d_G'(x,y)/effective_eps: {emp_ratio}\n Threshold/effective_eps: {theo_ratio}\n\n"
 

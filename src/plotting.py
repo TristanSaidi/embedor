@@ -7,7 +7,7 @@ import seaborn as sns
 import gudhi
 import persim
 
-from src.eval_utils import *
+from src.utils.eval_utils import *
 
 # plotting functions
 
