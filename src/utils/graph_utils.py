@@ -2,10 +2,9 @@ import networkx as nx
 import numpy as np
 import numpy as np
 from sklearn import neighbors
-from src.OllivierRicci import OllivierRicci
+from src.ollivier_ricci import OllivierRicci
 import multiprocessing as mp
 import tqdm
-from src.OllivierRicci import OllivierRicci
 
 def compute_eff_eps_graph(G, edge):
     """
