@@ -2,6 +2,7 @@ from codecs import open
 from os import path
 
 from setuptools import setup
+import numpy
 
 print("Installing metric_fa\n")
 
@@ -18,6 +19,7 @@ print(">>>> Starting to install!\n")
 setup(
     name='metric_fa',
     install_requires=['numpy', 'scipy', 'tqdm'],
+    include_dirs=[numpy.get_include()],
     extras_require={
         'networkx': ['networkx'],
         'igraph': ['python-igraph']

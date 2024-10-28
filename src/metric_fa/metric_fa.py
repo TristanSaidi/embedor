@@ -44,6 +44,9 @@ class MetricFA:
                  strongGravityMode=False,
                  gravity=1.0,
 
+                 # dim
+                 dim=2,
+
                  # Log
                  verbose=True):
         assert linLogMode == adjustSizes == multiThreaded == False, "You selected a feature that has not been implemented yet..."
@@ -57,6 +60,7 @@ class MetricFA:
         self.scalingRatio = scalingRatio
         self.strongGravityMode = strongGravityMode
         self.gravity = gravity
+        self.dim = dim
         self.verbose = verbose
 
     def init(self,
@@ -81,21 +85,23 @@ class MetricFA:
         # Put nodes into a data structure we can understand
         nodes = []
         for i in range(0, G.shape[0]):
-            n = metric_fa_util.Node()
+            n = metric_fa_util.Node(dim=self.dim)
             if isSparse:
                 n.mass = 1 + len(G.rows[i])
             else:
                 n.mass = 1 + numpy.count_nonzero(G[i])
-            n.old_dx = 0
-            n.old_dy = 0
-            n.dx = 0
-            n.dy = 0
+            # n.old_dx = 0
+            # n.old_dy = 0
+            # n.dx = 0
+            # n.dy = 0
             if pos is None:
-                n.x = random.random()
-                n.y = random.random()
+                # n.x = random.random()
+                # n.y = random.random()
+                n.position = numpy.random.rand(self.dim)
             else:
-                n.x = pos[i][0]
-                n.y = pos[i][1]
+                # n.x = pos[i][0]
+                # n.y = pos[i][1]
+                n.position = pos
             nodes.append(n)
 
         # Put edges into a data structure we can understand
@@ -161,15 +167,17 @@ class MetricFA:
             niters = tqdm(niters)
         for _i in niters:
             for n in nodes:
-                n.old_dx = n.dx
-                n.old_dy = n.dy
-                n.dx = 0
-                n.dy = 0
+                # n.old_dx = n.dx
+                # n.old_dy = n.dy
+                n.old_delta = n.delta
+                # n.dx = 0
+                # n.dy = 0
+                n.delta = numpy.zeros(self.dim)
 
             # Barnes Hut optimization
             if self.barnesHutOptimize:
                 barneshut_timer.start()
-                rootRegion = metric_fa_util.Region(nodes)
+                rootRegion = metric_fa_util.Region(nodes, dim=self.dim)
                 rootRegion.buildSubRegions()
                 barneshut_timer.stop()
 
@@ -208,7 +216,8 @@ class MetricFA:
             attraction_timer.display()
             applyforces_timer.display()
         # ================================================================
-        return [(n.x, n.y) for n in nodes]
+        positions = numpy.array([n.position for n in nodes])
+        return positions
 
     # A layout for NetworkX.
     #
@@ -233,35 +242,3 @@ class MetricFA:
             poslist = numpy.asarray([pos[i] for i in G.nodes()])
             l = self.forceatlas2(M, pos=poslist, iterations=iterations)
         return dict(zip(G.nodes(), l))
-
-    # A layout for igraph.
-    #
-    # This function returns an igraph layout
-    def forceatlas2_igraph_layout(self, G, pos=None, iterations=100, weight_attr=None):
-
-        from scipy.sparse import csr_matrix
-        import igraph
-
-        def to_sparse(graph, weight_attr=None):
-            edges = graph.get_edgelist()
-            if weight_attr is None:
-                weights = [1] * len(edges)
-            else:
-                weights = graph.es[weight_attr]
-
-            if not graph.is_directed():
-                edges.extend([(v, u) for u, v in edges])
-                weights.extend(weights)
-
-            return csr_matrix((weights, list(zip(*edges))))
-
-        assert isinstance(G, igraph.Graph), "Not a igraph graph"
-        assert isinstance(pos, (list, numpy.ndarray)) or (pos is None), "pos must be a list or numpy array"
-
-        if isinstance(pos, list):
-            pos = numpy.array(pos)
-
-        adj = to_sparse(G, weight_attr)
-        coords = self.forceatlas2(adj, pos=pos, iterations=iterations)
-
-        return igraph.layout.Layout(coords, 2)
