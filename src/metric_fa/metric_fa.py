@@ -97,7 +97,7 @@ class MetricFA:
             if pos is None:
                 # n.x = random.random()
                 # n.y = random.random()
-                n.position = numpy.random.rand(self.dim)
+                n.position = [random.random() for _ in range(self.dim)]
             else:
                 # n.x = pos[i][0]
                 # n.y = pos[i][1]
@@ -172,7 +172,7 @@ class MetricFA:
                 n.old_delta = n.delta
                 # n.dx = 0
                 # n.dy = 0
-                n.delta = numpy.zeros(self.dim)
+                n.delta = [0.0] * self.dim
 
             # Barnes Hut optimization
             if self.barnesHutOptimize:
@@ -216,7 +216,7 @@ class MetricFA:
             attraction_timer.display()
             applyforces_timer.display()
         # ================================================================
-        positions = numpy.array([n.position for n in nodes])
+        positions = [n.position for n in nodes]
         return positions
 
     # A layout for NetworkX.

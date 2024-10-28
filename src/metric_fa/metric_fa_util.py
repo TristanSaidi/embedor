@@ -1,8 +1,8 @@
 # Modified implementation of (C) 2017 Bhargav Chippada <bhargavchippada19@gmail.com>
 
 from math import sqrt
-import numpy as np
-
+# import numpy as np
+from operator import add, sub
 # This will substitute for the nLayout object
 class Node:
     def __init__(self, dim):
@@ -13,9 +13,9 @@ class Node:
         # self.dy = 0.0
         # self.x = 0.0
         # self.y = 0.0
-        self.old_delta = np.zeros(dim)
-        self.delta = np.zeros(dim)
-        self.position = np.zeros(dim)
+        self.old_delta = [0.0] * dim
+        self.delta = [0.0] * dim
+        self.position = [0.0] * dim
         
 
 
@@ -36,11 +36,10 @@ def linRepulsion(n1, n2, coefficient=0):
     # xDist = n1.x - n2.x
     # yDist = n1.y - n2.y
     # convert to numpy array
-    n1_pos = np.asarray(n1.position)
-    n2_pos = np.asarray(n2.position)
-    displacement = n1_pos - n2_pos
-    distance2 = np.sum(displacement ** 2)  # Distance squared
-    # distance2 = xDist * xDist + yDist * yDist  # Distance squared
+    n1_pos = n1.position
+    n2_pos = n2.position
+    displacement = [p1 - p2 for p1, p2 in zip(n1_pos, n2_pos)]
+    distance2 = sum([d ** 2 for d in displacement])  # Distance squared
 
     if distance2 > 0:
         factor = coefficient * n1.mass * n2.mass / distance2
@@ -48,8 +47,8 @@ def linRepulsion(n1, n2, coefficient=0):
         # n1.dy += yDist * factor
         # n2.dx -= xDist * factor
         # n2.dy -= yDist * factor
-        n1.delta += displacement * factor
-        n2.delta -= displacement * factor
+        n1.delta = list(map(add, n1.delta, [d * factor for d in displacement]))
+        n2.delta = list(map(sub, n2.delta, [d * factor for d in displacement]))
 
 
 # Repulsion function. 'n' is node and 'r' is region
@@ -57,16 +56,18 @@ def linRepulsion_region(n, r, coefficient=0):
     # xDist = n.x - r.massCenterX
     # yDist = n.y - r.massCenterY
     # distance2 = xDist * xDist + yDist * yDist
-    position = np.asarray(n.position)
-    massCenter = np.asarray(r.massCenter)
-    displacement = position - massCenter
-    distance2 = np.sum(displacement ** 2)
+    position = n.position
+    massCenter = r.massCenter
+    displacement = list(map(sub, position, massCenter))
+    # distance2 = displacement ** 2
+    distance2 = sum([d ** 2 for d in displacement])
 
     if distance2 > 0:
         factor = coefficient * n.mass * r.mass / distance2
         # n.dx += xDist * factor
         # n.dy += yDist * factor
-        n.delta += displacement * factor
+        # n.delta += displacement * factor
+        n.delta = list(map(add, n.delta, [d * factor for d in displacement]))
 
 
 # Gravity repulsion function.  For some reason, gravity was included
@@ -79,13 +80,15 @@ def linGravity(n, g):
     # yDist = n.y
     # distance = sqrt(xDist * xDist + yDist * yDist)
     displacement = n.position
-    distance = np.sqrt(np.sum(displacement ** 2))
+    # distance = np.sqrt(np.sum(displacement ** 2))
+    distance = sum([d ** 2 for d in displacement]) ** 0.5
 
     if distance > 0:
         factor = n.mass * g / distance
         # n.dx -= xDist * factor
         # n.dy -= yDist * factor
-        n.delta -= displacement * factor
+        # n.delta -= displacement * factor
+        n.delta = list(map(sub, n.delta, [d * factor for d in displacement]))
 
 
 # Strong gravity force function. `n` should be a node, and `g`
@@ -98,9 +101,13 @@ def strongGravity(n, g, coefficient=0):
     #     n.dx -= xDist * factor
     #     n.dy -= yDist * factor
     displacement = n.position
-    if np.all(displacement != 0):
+    # if np.all(displacement != 0):
+    #     factor = coefficient * n.mass * g
+    #     n.delta -= displacement * factor
+    if not all(d == 0 for d in displacement):
         factor = coefficient * n.mass * g
-        n.delta -= displacement * factor
+        # n.delta -= displacement * factor
+        n.delta = list(map(sub, n.delta, [d * factor for d in displacement]))
 
 
 
@@ -111,9 +118,10 @@ def linAttraction(n1, n2, e, distributedAttraction, coefficient=0):
     # xDist = n1.x - n2.x
     # yDist = n1.y - n2.y
     # displacement = n1.position - n2.position
-    position1 = np.asarray(n1.position)
-    position2 = np.asarray(n2.position)
-    displacement = position1 - position2
+    position1 = n1.position
+    position2 = n2.position
+    # displacement = position1 - position2
+    displacement = list(map(sub, position1, position2))
     if not distributedAttraction:
         factor = -coefficient * e
     else:
@@ -122,8 +130,10 @@ def linAttraction(n1, n2, e, distributedAttraction, coefficient=0):
     # n1.dy += yDist * factor
     # n2.dx -= xDist * factor
     # n2.dy -= yDist * factor
-    n1.delta += displacement * factor
-    n2.delta -= displacement * factor
+    # n1.delta += displacement * factor
+    # n2.delta -= displacement * factor
+    n1.delta = list(map(add, n1.delta, [d * factor for d in displacement]))
+    n2.delta = list(map(sub, n2.delta, [d * factor for d in displacement]))
 
 
 # The following functions iterate through the nodes or edges and apply
@@ -170,7 +180,7 @@ class Region:
         self.mass = 0.0
         # self.massCenterX = 0.0
         # self.massCenterY = 0.0
-        self.massCenter = np.zeros(dim)
+        self.massCenter = [0.0] * dim
         self.size = 0.0
         self.nodes = nodes
         self.subregions = []
@@ -181,24 +191,26 @@ class Region:
             self.mass = 0
             # massSumX = 0
             # massSumY = 0
-            massSum = np.zeros(np.asarray(self.massCenter).shape)
+            massSum = [0.0] * len(self.massCenter)
             for n in self.nodes:
                 self.mass += n.mass
                 # massSumX += n.x * n.mass
                 # massSumY += n.y * n.mass
-                position = np.asarray(n.position)
+                position = n.position
                 # print(np.asarray(n.position).shape)
-                massSum += position * n.mass
+                # massSum += position * n.mass
+                massSum = list(map(add, massSum, [p * n.mass for p in position]))
             # self.massCenterX = massSumX / self.mass
             # self.massCenterY = massSumY / self.mass
-            self.massCenter = massSum / self.mass
+            self.massCenter = [p / self.mass for p in massSum]
 
             self.size = 0.0
             for n in self.nodes:
                 # distance = sqrt((n.x - self.massCenterX) ** 2 + (n.y - self.massCenterY) ** 2)
-                position = np.asarray(n.position)
-                massCenter = np.asarray(self.massCenter)
-                distance = np.sqrt(np.sum((position - massCenter) ** 2))
+                position = n.position
+                massCenter = self.massCenter
+                # distance = np.sqrt(np.sum((position - massCenter) ** 2))
+                distance = sum([(p - mc) ** 2 for p, mc in zip(position, massCenter)]) ** 0.5
                 self.size = max(self.size, 2 * distance)
 
     def buildSubRegions(self):
@@ -211,7 +223,6 @@ class Region:
             # 2 ^ dim subregions
             numSubregions = int(2 ** len(self.massCenter))
             subregions = [[] for _ in range(numSubregions)]
-
             # Optimization: The distribution of self.nodes into 
             # subregions now requires only one for loop. Removed 
             # topNodes and bottomNodes arrays: memory space saving.
@@ -239,7 +250,7 @@ class Region:
                         self.subregions.append(subregion)
                     else:
                         for n in subregionNodes:
-                            subregion = Region([n])
+                            subregion = Region([n], dim=len(self.massCenter))
                             self.subregions.append(subregion)
 
             # if len(topleftNodes) > 0:
@@ -286,9 +297,10 @@ class Region:
             linRepulsion(n, self.nodes[0], coefficient)
         else:
             # distance = sqrt((n.x - self.massCenterX) ** 2 + (n.y - self.massCenterY) ** 2)
-            position = np.asarray(n.position)
-            massCenter = np.asarray(self.massCenter)
-            distance = np.sqrt(np.sum((position - massCenter) ** 2))
+            position = n.position
+            massCenter = self.massCenter
+            # distance = np.sqrt(np.sum((position - massCenter) ** 2))
+            distance = sum([(p - mc) ** 2 for p, mc in zip(position, massCenter)] ) ** 0.5
             # distance = np.sqrt(np.sum((n.position - self.massCenter) ** 2))
             if distance * theta > self.size:
                 linRepulsion_region(n, self, coefficient)
@@ -308,15 +320,17 @@ def adjustSpeedAndApplyForces(nodes, speed, speedEfficiency, jitterTolerance):
     totalEffectiveTraction = 0.0  # How much useful movement
     for n in nodes:
         # swinging = sqrt((n.old_dx - n.dx) * (n.old_dx - n.dx) + (n.old_dy - n.dy) * (n.old_dy - n.dy))
-        old_delta = np.asarray(n.old_delta)
-        delta = np.asarray(n.delta)
+        old_delta = n.old_delta
+        delta = n.delta
         # swinging = np.sqrt(np.sum((n.old_delta - n.delta) ** 2))
-        swinging = np.sqrt(np.sum((old_delta - delta) ** 2))
+        # swinging = np.sqrt(np.sum((old_delta - delta) ** 2))
+        swinging = sum([(od - d) ** 2 for od, d in zip(old_delta, delta)]) ** 0.5
         totalSwinging += n.mass * swinging
         # totalEffectiveTraction += .5 * n.mass * sqrt(
             # (n.old_dx + n.dx) * (n.old_dx + n.dx) + (n.old_dy + n.dy) * (n.old_dy + n.dy))
         # totalEffectiveTraction += .5 * n.mass * np.sqrt(np.sum((n.old_delta + n.delta) ** 2))
-        totalEffectiveTraction += .5 * n.mass * np.sqrt(np.sum((old_delta + delta) ** 2))
+        # totalEffectiveTraction += .5 * n.mass * np.sqrt(np.sum((old_delta + delta) ** 2))
+        totalEffectiveTraction += .5 * n.mass * sum([(od + d) ** 2 for od, d in zip(old_delta, delta)]) ** 0.5
     # Optimize jitter tolerance.  The 'right' jitter tolerance for
     # this network. Bigger networks need more tolerance. Denser
     # networks need less tolerance. Totally empiric.
@@ -358,17 +372,19 @@ def adjustSpeedAndApplyForces(nodes, speed, speedEfficiency, jitterTolerance):
     for n in nodes:
         # swinging = n.mass * sqrt((n.old_dx - n.dx) * (n.old_dx - n.dx) + (n.old_dy - n.dy) * (n.old_dy - n.dy))
         # swinging = n.mass * np.sqrt(np.sum((n.old_delta - n.delta) ** 2))
-        old_delta = np.asarray(n.old_delta)
-        delta = np.asarray(n.delta)
-        swinging = n.mass * np.sqrt(np.sum((old_delta - delta) ** 2))
+        old_delta = n.old_delta
+        delta = n.delta
+        # swinging = n.mass * np.sqrt(np.sum((old_delta - delta) ** 2))
+        swinging = n.mass * sum([(od - d) ** 2 for od, d in zip(old_delta, delta)]) ** 0.5
         factor = speed / (1.0 + sqrt(speed * swinging))
         # n.x = n.x + (n.dx * factor)
         # n.y = n.y + (n.dy * factor)
 
         # n.position = n.position + (n.delta * factor)
-        position = np.asarray(n.position)
+        position = n.position
         # print("before: ", np.asarray(n.position).shape)
-        n.position = position + (delta * factor)
+        # n.position = position + (delta * factor)
+        n.position = list(map(add, position, [d * factor for d in delta]))
         # print("after: ", np.asarray(n.position).shape)
         # print()
         # print()

@@ -8,9 +8,9 @@ cdef class Node:
     # cdef public double[:] old_delta  # 1D array of doubles
     # cdef public double[:] delta      # 1D array of doubles
     # cdef public double[:] position   # 1D array of doubles
-    cdef public np.ndarray old_delta
-    cdef public np.ndarray delta
-    cdef public np.ndarray position
+    cdef public list old_delta
+    cdef public list delta
+    cdef public list position
 
     # cdef inline __cinit__(self, int dim):
     #     # Initialize each attribute, ensuring arrays are created with the specified dimension
@@ -30,28 +30,28 @@ cdef class Edge:
 # adjust the dx and dy values of `n1` (and optionally `n2`).  It does
 # not return anything.
 
-@cython.locals(displacement = np.ndarray,
+@cython.locals(displacement = list,
                distance2 = cython.double, 
                factor = cython.double)
 cdef void linRepulsion(Node n1, Node n2, double coefficient=*)
 
-@cython.locals(displacement = np.ndarray,
+@cython.locals(displacement = list,
                distance2 = cython.double,
                factor = cython.double)
 cdef void linRepulsion_region(Node n, Region r, double coefficient=*)
 
 
-@cython.locals(displacement = np.ndarray,
+@cython.locals(displacement = list,
                distance = cython.double, 
                factor = cython.double)
 cdef void linGravity(Node n, double g)
 
 
-@cython.locals(displacement = np.ndarray,
+@cython.locals(displacement = list,
                factor = cython.double)
 cdef void strongGravity(Node n, double g, double coefficient=*)
 
-@cython.locals(displacement = np.ndarray,
+@cython.locals(displacement = list,
                factor = cython.double)
 cpdef void linAttraction(Node n1, Node n2, double e, bint distributedAttraction, double coefficient=*)
 
@@ -69,7 +69,7 @@ cpdef void apply_attraction(list nodes, list edges, bint distributedAttraction, 
 
 cdef class Region:
     cdef double mass
-    cdef np.ndarray massCenter  # 1D array for mass center in given dimensions
+    cdef list massCenter  # 1D array for mass center in given dimensions
     cdef double size
     cdef object nodes  # For a list of nodes, we’ll use Python’s dynamic typing
     cdef list subregions  # List of subregions as a standard Python list
@@ -81,9 +81,9 @@ cdef class Region:
     #     self.nodes = nodes
     #     self.subregions = []
 
-    @cython.locals(massSum = np.ndarray,
-                   position = np.ndarray,
-                   massCenter = np.ndarray,
+    @cython.locals(massSum = list,
+                   position = list,
+                   massCenter = list,
                    n = Node,
                    distance = cython.double)
     cdef void updateMassAndGeometry(self)
