@@ -5,12 +5,9 @@ cimport numpy as np
 
 cdef class Node:
     cdef public double mass  # Define mass as a double for efficient storage
-    # cdef public double[:] old_delta  # 1D array of doubles
-    # cdef public double[:] delta      # 1D array of doubles
-    # cdef public double[:] position   # 1D array of doubles
-    cdef public list old_delta
-    cdef public list delta
-    cdef public list position
+    cdef public object old_delta  # 1D array of doubles
+    cdef public object delta      # 1D array of doubles
+    cdef public object position   # 1D array of doubles
 
     # cdef inline __cinit__(self, int dim):
     #     # Initialize each attribute, ensuring arrays are created with the specified dimension
@@ -30,28 +27,26 @@ cdef class Edge:
 # adjust the dx and dy values of `n1` (and optionally `n2`).  It does
 # not return anything.
 
-@cython.locals(displacement = list,
-               distance2 = cython.double, 
+@cython.locals(displacement = np.ndarray,
+               distance2 = cython.double,
                factor = cython.double)
 cdef void linRepulsion(Node n1, Node n2, double coefficient=*)
 
-@cython.locals(displacement = list,
+@cython.locals(displacement = np.ndarray,
                distance2 = cython.double,
                factor = cython.double)
 cdef void linRepulsion_region(Node n, Region r, double coefficient=*)
 
 
-@cython.locals(displacement = list,
-               distance = cython.double, 
+@cython.locals(distance = cython.double, 
                factor = cython.double)
 cdef void linGravity(Node n, double g)
 
 
-@cython.locals(displacement = list,
-               factor = cython.double)
+@cython.locals(factor = cython.double)
 cdef void strongGravity(Node n, double g, double coefficient=*)
 
-@cython.locals(displacement = list,
+@cython.locals(displacement = np.ndarray,
                factor = cython.double)
 cpdef void linAttraction(Node n1, Node n2, double e, bint distributedAttraction, double coefficient=*)
 
@@ -69,7 +64,8 @@ cpdef void apply_attraction(list nodes, list edges, bint distributedAttraction, 
 
 cdef class Region:
     cdef double mass
-    cdef list massCenter  # 1D array for mass center in given dimensions
+    cdef int dim
+    cdef object massCenter  # 1D array for mass center in given dimensions
     cdef double size
     cdef object nodes  # For a list of nodes, we’ll use Python’s dynamic typing
     cdef list subregions  # List of subregions as a standard Python list
@@ -81,15 +77,14 @@ cdef class Region:
     #     self.nodes = nodes
     #     self.subregions = []
 
-    @cython.locals(massSum = list,
-                   position = list,
-                   massCenter = list,
+    @cython.locals(massSum = np.ndarray,
                    n = Node,
                    distance = cython.double)
     cdef void updateMassAndGeometry(self)
 
     @cython.locals(n = Node,
                    numSubregions = int,
+                   i = int,
                    subregions = list,
                    subregion = Region)
     cpdef void buildSubRegions(self)
