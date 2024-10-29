@@ -10,7 +10,7 @@ from Cython.Distutils import Extension
 from Cython.Build import build_ext, cythonize
 
 print('Yes\n')
-ext_modules = cythonize([Extension('metric_fa_util', ['metric_fa_util.py'], cython_directives={'language_level' : 3})])
+ext_modules = cythonize([Extension('metric_fa_util', ['metric_fa_util.pyx'], cython_directives={'language_level' : 3})])
 cmdclass = {'build_ext': build_ext}
 opts = {"ext_modules": ext_modules, "cmdclass": cmdclass}
 
