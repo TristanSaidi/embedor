@@ -7,91 +7,140 @@ from tqdm import tqdm
 import torch
 
 
-def isorc_summary(G):
-    """
-    Summarize the isorc annotations of the graph.
-    Parameters
-    ----------
-    G : networkx.Graph
-        The graph to summarize. Should be annotated with isorc.
-    Returns
-    -------
-    sc_ind : np.ndarray
-        The shortcut indicator matrix.
-    D_G_prime : np.ndarray
-        The G_prime distance matrix.
-    """
-    # create two |V| x |V| matrices
-    n = len(G.nodes)
-    sc_ind = np.zeros((n, n))
-    D_G_prime = np.zeros((n, n))
+class ISORC(object):
 
-    # iterate through edges of G
-    for u, v in G.edges:
-        # get the isorc annotation of the edge: shortcut
-        sc = G[u][v]['shortcut']
-        sc_ind[u, v] = sc
-        sc_ind[v, u] = sc
-        # get the isorc annotation of the edge: distance
-        d = G[u][v]['G_prime_dist']
-        if d == np.inf:
-            d = 10 * G[u][v]['weight']
-        D_G_prime[u, v] = d
-        D_G_prime[v, u] = d
-    return sc_ind, D_G_prime
+    def __init__(self, orcmanl=None, exp_params=default_exp_params, verbose=False):
+        """ 
+        Initialize the ISORC algorithm.
+        Parameters
+        ----------
+        orcmanl : ORCManL
+            The ORCManL object.
+        exp_params : dict
+            The experimental parameters. Includes 'mode', 'n_neighbors', 'epsilon', 'lda', 'delta'.
+        verbose : bool, optional
+            Whether to print verbose output for ISORC algorithm.
+        """
+        if orcmanl is None:
+            self.orcmanl = ORCManL(exp_params=exp_params, verbose=verbose)
+        else:
+            self.orcmanl = orcmanl
+        self.exp_params = self.orcmanl.exp_params
+        self.verbose = verbose
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self._setup_structs()
+        self._ann_summary(self.orcmanl.G_ann) # get the annotation summary
+        self._eq_matrix() # compute the equilibrium matrix
 
-def equilibrium_matrix(sc_ind, D_G_prime, A, dist_scale=1.0):
-    """
-    Compute the spring equilibrium matrix for the isorc embedding.
-    Parameters
-    ----------
-    sc_ind : np.ndarray
-        The shortcut indicator matrix.
-    D_G_prime : np.ndarray
-        The G_prime distance matrix.
-    A : np.ndarray
-        The adjacency matrix of the graph.
-    dist_scale : float, optional
-        The distance scaling factor.
-    Returns
-    -------
-    E : np.ndarray
-        The equilibrium matrix.
-    """
-    # create the equilibrium matrix as element-wise maximum of A and sc_ind * D_G_prime
-    E = np.maximum(A, sc_ind * D_G_prime * dist_scale)
-    return E
 
-def isorc_embedding(G_ann, A, n_iter=1000, lr=0.1, dist_scale=1.0, frames=10):
-    
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    reversed_indices = np.array(np.argsort(G_ann.nodes))
-    # get initial positions
-    X = np.array([G_ann.nodes[i]['pos'] for i in G_ann.nodes])[reversed_indices]
-    X = torch.tensor(X).to(device).requires_grad_(True)
-    edge_mask = np.where(A > 0, 1, 0)
-    edge_mask = torch.tensor(edge_mask).to(device)
+    def _setup_structs(self):
+        """
+        Setup data structures for the ISORC algorithm.
+        """
+        # grab graph from ORCManL
+        self.G = self.orcmanl.G_ann
+        self.A = torch.tensor(self.orcmanl.A).to(self.device).requires_grad_(False)
+        self.index_map = np.array(np.argsort(self.G.nodes))
+        # data
+        self.X = torch.tensor(
+            np.array(
+                [self.G.nodes[i]['pos'] for i in self.G.nodes]
+            )[self.index_map]
+        ).to(self.device).requires_grad_(True)
+        self.X_opt = None
 
-    pdist = torch.cdist(X, X, p=2)
-    masked_pdist = pdist * edge_mask
-    sc_ind, d_G_prime = isorc_summary(G_ann)
-    E = torch.tensor(equilibrium_matrix(sc_ind, d_G_prime, A, dist_scale)). to(device)
-    # optimize X so that pairwise distances are close to the equilibrium distances
-    optimizer = torch.optim.Adam([X], lr=lr)
 
-    step_per_frame = n_iter // frames
-    X_frames = [X.clone().detach().cpu().numpy()]
-    with tqdm(total=n_iter) as pbar:
-        for i in range(n_iter):
-            optimizer.zero_grad()
-            pdist = torch.cdist(X, X, p=2)
-            fro_norm = torch.norm(pdist)
-            masked_pdist = pdist * edge_mask
-            loss = torch.sum((masked_pdist - E)**2) - 0.1 * fro_norm
-            loss.backward()
-            optimizer.step()
-            pbar.update(1)
-            pbar.set_postfix({'loss': loss.item()})
-            if i % step_per_frame == 0:
-                X_frames.append(X.clone().detach().cpu().numpy())
-    return X.detach().cpu().numpy(), X_frames
+    def _ann_summary(self, G):
+        """
+        Get information regarding orcmanl annotations.
+        Parameters
+        ----------
+        G : networkx.Graph
+            The annotated graph.
+        Returns
+        -------
+        sc_ind : np.ndarray
+            The shortcut indicator matrix.
+        D_G_prime : np.ndarray
+            The G_prime distance matrix.
+        """
+        # create two |V| x |V| matrices
+        n = len(G.nodes)
+        sc_ind = np.zeros((n, n))
+        D_G_prime = np.zeros((n, n))
+
+        # iterate through edges of G
+        for u, v in G.edges:
+            # get the isorc annotation of the edge: shortcut
+            sc = G[u][v]['shortcut']
+            sc_ind[u, v] = sc
+            sc_ind[v, u] = sc
+            # get the isorc annotation of the edge: distance
+            d = G[u][v]['G_prime_dist']
+            if d == np.inf:
+                d = 10 * G[u][v]['weight'] ### NEED TO CHANGE THIS
+            D_G_prime[u, v] = d
+            D_G_prime[v, u] = d    
+
+        self.D_G_prime = D_G_prime
+        self.sc_ind = sc_ind
+
+    def _eq_matrix(self, dist_scale=1.0):
+        """
+        Compute the spring equilibrium matrix for the isorc embedding.
+        Parameters
+        ----------
+        dist_scale : float, optional
+            The distance scaling factor.
+        """
+        # create the equilibrium matrix as element-wise maximum of A and sc_ind * D_G_prime
+        E = np.maximum(self.A.cpu().numpy(), self.sc_ind * self.D_G_prime * dist_scale)
+        self.E = torch.tensor(E).to(self.device)
+
+    def fit(
+            self,
+            n_iter=1000,
+            beta=1.0,
+            lr=0.1,
+            frames=10
+    ):
+        """
+        Fit the ISORC algorithm.
+        Parameters
+        ----------
+        n_iter : int, optional
+            The number of iterations.
+        lr : float, optional
+            The learning rate.
+        """
+        # optimize X so that pairwise distances are close to the equilibrium distances
+        self.X_opt = torch.tensor(
+            np.array(
+                [self.G.nodes[i]['pos'] for i in self.G.nodes]
+            )[self.index_map]
+        ).to(self.device).requires_grad_(True)
+        # optimizer and lr scheduler
+        optimizer = torch.optim.Adam([self.X_opt], lr=lr)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=1)
+        # animation
+        steps_per_frame = n_iter // frames
+        frames = [self.X_opt.clone().detach().cpu().numpy()]
+        with tqdm(total=n_iter) as pbar:
+            for i in range(n_iter):
+                optimizer.zero_grad()
+                pdist = torch.cdist(self.X_opt, self.X_opt, p=2)
+                fro_norm = torch.norm(pdist)
+                masked_pdist = pdist * self.A
+                loss = torch.sum((masked_pdist - self.E)**2) - beta * fro_norm
+                loss.backward()
+                optimizer.step()
+                if i % steps_per_frame == 0:
+                    frames.append(self.X_opt.clone().detach().cpu().numpy())
+                scheduler.step(loss)
+                # get last lr
+                lr = scheduler.get_last_lr()[0]
+                pbar.set_postfix({'loss': loss.item(), 'lr': lr})
+                pbar.update(1)
+        return self.X_opt.detach().cpu().numpy(), frames
+
+        
