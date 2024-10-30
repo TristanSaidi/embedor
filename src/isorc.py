@@ -40,6 +40,8 @@ class ISORC(object):
         # grab graph from ORCManL
         self.G = self.orcmanl.G_ann
         self.A = torch.tensor(self.orcmanl.A).to(self.device).requires_grad_(False)
+        # convert to unwieghted adjacency matrix
+        self.A_uw = torch.tensor(self.orcmanl.A > 0).to(self.device)
         self.index_map = np.array(np.argsort(self.G.nodes))
         # data
         self.X = torch.tensor(
@@ -77,13 +79,18 @@ class ISORC(object):
             sc_ind[v, u] = sc
             # get the isorc annotation of the edge: distance
             d = G[u][v]['G_prime_dist']
-            if d == np.inf:
-                d = 10 * G[u][v]['weight'] ### NEED TO CHANGE THIS
             D_G_prime[u, v] = d
             D_G_prime[v, u] = d    
 
+        # replace  np.inf d_G_prime entries with 10*max finite entry
+        max_finite = np.max(D_G_prime[np.isfinite(D_G_prime)])
+        D_G_prime[np.isinf(D_G_prime)] = 10 * max_finite
         self.D_G_prime = D_G_prime
-        self.sc_ind = sc_ind
+        self.sc_ind = sc_ind # shortcut indicator mask matrix
+        self.non_sc_mask = ~sc_ind.astype(bool) # non-shortcut indicator mask matrix
+        # create torch versions
+        self.sc_ind_torch = torch.tensor(sc_ind).to(self.device)
+        self.non_sc_mask_torch = torch.tensor(self.non_sc_mask).to(self.device)
 
     def _eq_matrix(self, dist_scale=1.0):
         """
@@ -101,6 +108,7 @@ class ISORC(object):
             self,
             n_iter=1000,
             beta=1.0,
+            alpha=0.1,
             lr=0.1,
             frames=10
     ):
@@ -121,7 +129,6 @@ class ISORC(object):
         ).to(self.device).requires_grad_(True)
         # optimizer and lr scheduler
         optimizer = torch.optim.Adam([self.X_opt], lr=lr)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=1)
         # animation
         steps_per_frame = n_iter // frames
         frames = [self.X_opt.clone().detach().cpu().numpy()]
@@ -130,16 +137,19 @@ class ISORC(object):
                 optimizer.zero_grad()
                 pdist = torch.cdist(self.X_opt, self.X_opt, p=2)
                 fro_norm = torch.norm(pdist)
-                masked_pdist = pdist * self.A
-                loss = torch.sum((masked_pdist - self.E)**2) - beta * fro_norm
+                masked_pdist = pdist * self.A_uw
+                # squared displacement
+                D_sq = (masked_pdist - self.E)**2
+                # clamp D_sq so max value is max value of nonshortcut edges
+                max_val = 5 * torch.max(D_sq[self.non_sc_mask_torch])
+                D_sq = torch.clamp(D_sq, max=max_val)
+                # compute loss
+                loss = torch.sum(D_sq) - beta * fro_norm
                 loss.backward()
                 optimizer.step()
                 if i % steps_per_frame == 0:
                     frames.append(self.X_opt.clone().detach().cpu().numpy())
-                scheduler.step(loss)
-                # get last lr
-                lr = scheduler.get_last_lr()[0]
-                pbar.set_postfix({'loss': loss.item(), 'lr': lr})
+                pbar.set_postfix({'loss': loss.item()})
                 pbar.update(1)
         return self.X_opt.detach().cpu().numpy(), frames
 
