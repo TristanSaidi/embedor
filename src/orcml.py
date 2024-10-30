@@ -63,6 +63,7 @@ class ORCManL(object):
         self.shortcut_edges = None # indices of shortcut edges
         # Annotated graph
         self.G_ann = None
+        self.A_ann = None
 
     def _setup_thresholds(self):
         """
@@ -134,6 +135,10 @@ class ORCManL(object):
         Validation step for the ORCManL algorithm.
         """
         self.G_ann = self.G.copy()
+        # add attribute for all edges
+        for i, j in self.G_ann.edges():
+            self.G_ann[i][j]['shortcut'] = 0
+            self.G_ann[i][j]['G_prime_dist'] = self.G_ann[i][j]['weight'] # euclidean distance
         self.G_pruned = self.G_prime.copy()
         self.non_shortcut_edges = list(range(len(self.G.edges()))) # start from all edges and remove as we go
         self.shortcut_edges = [] # start empty and add as we go
@@ -176,6 +181,7 @@ class ORCManL(object):
         self.G_pruned.add_edge(i, j, weight=self.G[i][j]["weight"])
         self.G_pruned[i][j]['ricciCurvature'] = self.G[i][j]['ricciCurvature']
         self.G_pruned[i][j]['effective_eps'] = self.G[i][j]['effective_eps']
+        self.G_ann[i][j]['shortcut'] = 0
 
     def _reattach_isolated_nodes(self):
         """
