@@ -30,7 +30,7 @@ class ISORC(object):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self._setup_structs()
         self._ann_summary(self.orcmanl.G_ann) # get the annotation summary
-        self._eq_matrix() # compute the equilibrium matrix
+        # self._eq_matrix() # compute the equilibrium matrix
 
 
     def _setup_structs(self):
@@ -38,16 +38,19 @@ class ISORC(object):
         Setup data structures for the ISORC algorithm.
         """
         # grab graph from ORCManL
-        self.G = self.orcmanl.G_ann
-        self.A = torch.tensor(self.orcmanl.A).to(self.device).requires_grad_(False)
-        # convert to unwieghted adjacency matrix
-        self.A_uw = torch.tensor(self.orcmanl.A > 0).to(self.device)
+        self.G = self.orcmanl.G_pruned
+        self.A = self.orcmanl.A_pruned
+
         self.index_map = np.array(np.argsort(self.G.nodes))
+        # inverse index map
+        self.inv_index_map = np.zeros(len(self.index_map), dtype=int)
+        for i, idx in enumerate(self.index_map):
+            self.inv_index_map[idx] = i
+        # adjust indexing of A
+        self.A = self.A[self.index_map][:, self.index_map]
         # data
         self.X = torch.tensor(
-            np.array(
-                [self.G.nodes[i]['pos'] for i in self.G.nodes]
-            )[self.index_map]
+            self.orcmanl.X
         ).to(self.device).requires_grad_(True)
         self.X_opt = None
 
@@ -82,15 +85,22 @@ class ISORC(object):
             D_G_prime[u, v] = d
             D_G_prime[v, u] = d    
 
-        # replace  np.inf d_G_prime entries with 10*max finite entry
-        max_finite = np.max(D_G_prime[np.isfinite(D_G_prime)])
-        D_G_prime[np.isinf(D_G_prime)] = 10 * max_finite
         self.D_G_prime = D_G_prime
         self.sc_ind = sc_ind # shortcut indicator mask matrix
         self.non_sc_mask = ~sc_ind.astype(bool) # non-shortcut indicator mask matrix
         # create torch versions
+        self.D_G_prime_torch = torch.tensor(D_G_prime).to(self.device)
         self.sc_ind_torch = torch.tensor(sc_ind).to(self.device)
         self.non_sc_mask_torch = torch.tensor(self.non_sc_mask).to(self.device)
+        # create a connected component mask by computing pairwise distances with adjacency matrix
+        self.geo_dist = scipy.sparse.csgraph.shortest_path(self.A, directed=False)
+        # set infinities to zero, all other values to 1
+        self.connected_comp_mask = torch.tensor(self.geo_dist < np.inf).to(self.device)
+        self.geo_dist = torch.tensor(self.geo_dist).to(self.device)
+        # replace infinities with 0
+        self.masked_geo_dist = torch.where(self.geo_dist == np.inf, torch.tensor(0.0).to(self.device), self.geo_dist)
+        # get max value of nonshortcut edges
+        self.max_val = torch.max(self.geo_dist[self.geo_dist < np.inf])
 
     def _eq_matrix(self, dist_scale=1.0):
         """
@@ -107,8 +117,7 @@ class ISORC(object):
     def fit(
             self,
             n_iter=1000,
-            beta=1.0,
-            alpha=0.1,
+            beta=0.0,
             lr=0.1,
             frames=10
     ):
@@ -123,9 +132,7 @@ class ISORC(object):
         """
         # optimize X so that pairwise distances are close to the equilibrium distances
         self.X_opt = torch.tensor(
-            np.array(
-                [self.G.nodes[i]['pos'] for i in self.G.nodes]
-            )[self.index_map]
+            self.orcmanl.X
         ).to(self.device).requires_grad_(True)
         # optimizer and lr scheduler
         optimizer = torch.optim.Adam([self.X_opt], lr=lr)
@@ -137,19 +144,24 @@ class ISORC(object):
                 optimizer.zero_grad()
                 pdist = torch.cdist(self.X_opt, self.X_opt, p=2)
                 fro_norm = torch.norm(pdist)
-                masked_pdist = pdist * self.A_uw
-                # squared displacement
-                D_sq = (masked_pdist - self.E)**2
-                # clamp D_sq so max value is max value of nonshortcut edges
-                max_val = 5 * torch.max(D_sq[self.non_sc_mask_torch])
-                D_sq = torch.clamp(D_sq, max=max_val)
+                masked_pdist = pdist * self.connected_comp_mask
+                # squared displacement for same cc pairs
+                D_sq_same_cc = (masked_pdist - self.masked_geo_dist)**2
+                # squared displacement for shortcut edges
+                print(self.max_val)
+                D_sq_sc = (masked_pdist - self.max_val)**2 * self.sc_ind_torch
+                # clamp D_sq_sc so max value is max value of nonshortcut edges
+                D_sq_sc = torch.clamp(D_sq_sc, max=self.max_val)
                 # compute loss
-                loss = torch.sum(D_sq) - beta * fro_norm
+                loss_sc = torch.sum(D_sq_sc)
+                loss_same_cc = torch.sum(D_sq_same_cc)
+                loss_spread = - beta * fro_norm
+                loss = loss_sc + loss_spread
                 loss.backward()
                 optimizer.step()
                 if i % steps_per_frame == 0:
                     frames.append(self.X_opt.clone().detach().cpu().numpy())
-                pbar.set_postfix({'loss': loss.item()})
+                pbar.set_postfix({'loss': loss.item(), 'loss_sc': loss_sc.item(), 'loss_same_cc': loss_same_cc.item(), 'loss_spread': loss_spread.item()})
                 pbar.update(1)
         return self.X_opt.detach().cpu().numpy(), frames
 
