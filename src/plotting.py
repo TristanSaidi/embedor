@@ -388,8 +388,8 @@ class animation:
         return sliders_dict
     
     def animate_3D(frames):
-        Xs, Gs = frames['Xs'], frames['Gs']
-        figs = [plot_graph_3D(X, G, title=None) for (X, G) in zip(Xs, Gs)]
+        Xs, G = frames['Xs'], frames['G']
+        figs = [plot_graph_3D(X, G, title=None) for X in Xs]
         fig_dict = {
             "data": figs[0]["data"],
             "layout": figs[0]["layout"],

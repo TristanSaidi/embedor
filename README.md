@@ -52,3 +52,9 @@ G_pruned = orcmanl.get_pruned_graph()
 # visualize the graph
 plot_graph_2D(X=data, graph=G_pruned, title='Pruned Graph')
 ```
+
+## Recompiling MetricFA
+Simply change to the `\src\metric_fa` directory and run the following shell command:
+```
+python setup.py build_ext --inplace
+```
