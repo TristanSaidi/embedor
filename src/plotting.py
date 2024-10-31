@@ -36,7 +36,7 @@ def plot_data_2D(X, color, title, node_size=10, axes=False, exp_name=None, filen
         path = os.path.join(exp_dir, filename)
         plt.savefig(path)
 
-def plot_graph_2D(X, graph, title, node_color='#1f78b4', edge_color='lightgray', node_size=10, edge_width=1.0, colorbar=False, exp_name=None, filename=None, cmap=plt.cm.Spectral, edge_vrange=(-1,1)):
+def plot_graph_2D(X, graph, title, node_color='#1f78b4', node_size=3, edge_width=0.5, edge_color='lightgrey', colorbar=False, camera=None, exp_name=None, filename=None, axes=False, cmap='Viridis', opacity=None, cmin=-1, cmax=1, node_colorbar=False, node_colorbar_title=None):
     """
     Plot the graph with the desired node or edge coloring.
     Parameters
@@ -52,49 +52,67 @@ def plot_graph_2D(X, graph, title, node_color='#1f78b4', edge_color='lightgray',
     edge_color : str
         The color of the edges.
     """
-    if type(edge_color) == str:
-        edge_cmap = plt.cm.viridis
+    edge_x = []
+    edge_y = []
+    for edge in graph.edges():
+        x0, y0 = X[edge[0]]
+        x1, y1 = X[edge[1]]
+        edge_x += [x0, x1, None]
+        edge_y += [y0, y1, None]
+
+    edge_trace = go.Scatter(
+        x=edge_x, y=edge_y,
+        mode='lines',
+        line=dict(
+            width=edge_width,
+            color=edge_color,
+        ),
+        opacity=opacity,
+        showlegend=False
+    )
+    marker_data = go.Scatter(
+        x=X[:, 0],
+        y=X[:, 1],
+        mode='markers',
+        marker=dict(
+            size=node_size,
+            color=node_color,
+            colorbar=dict(
+                title=node_colorbar_title,
+                thickness=40,
+                xanchor='left',
+                titleside='right',
+                tickfont=dict(size=30),
+            ) if node_colorbar else None,
+            colorscale=cmap,
+            opacity=0.8,
+            cmin=cmin,
+            cmax=cmax
+        ),
+        showlegend=False
+    )
+    if node_size != 0:
+        fig = go.Figure(data=[edge_trace, marker_data])
     else:
-        edge_cmap = plt.cm.coolwarm
-    plt.figure(figsize=(6, 6))
-    plt.gca().set_aspect('equal')
-    edge_vmin, edge_vmax = edge_vrange
-    nx.draw(graph, X, node_color=node_color, edge_color=edge_color, node_size=node_size, cmap=cmap, edge_cmap=edge_cmap, edge_vmin=edge_vmin, edge_vmax=edge_vmax, width=edge_width)
-    ax = plt.gca()
-
-    # Get the current x and y limits
-    x_limits = ax.get_xlim()
-    y_limits = ax.get_ylim()
-
-    # Calculate the range of x and y limits
-    x_range = x_limits[1] - x_limits[0]
-    y_range = y_limits[1] - y_limits[0]
-
-    # Find the larger range between x and y to make them equal
-    max_range = max(x_range, y_range)
-
-    # Find the center points of the current x and y limits
-    x_center = (x_limits[0] + x_limits[1]) / 2
-    y_center = (y_limits[0] + y_limits[1]) / 2
-
-    # Adjust both x and y limits to be centered around the midpoint
-    ax.set_xlim([x_center - max_range / 2, x_center + max_range / 2])
-    ax.set_ylim([y_center - max_range / 2, y_center + max_range / 2])
-
-    plt.title(title)
+        fig = go.Figure(data=[edge_trace])
+    fig.update_layout(title=title)
+    fig.update_layout(scene=dict(aspectmode='data'))
+    if camera is not None:
+        fig.update_layout(scene_camera=camera)
+    if not axes:
+        fig.update_layout(scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False)))
     if colorbar:
-        # make colorbar smaller
-        sm = plt.cm.ScalarMappable(cmap=plt.cm.coolwarm, norm=plt.Normalize(vmin=edge_vmin, vmax=edge_vmax))
-        sm._A = []
-        cbar = plt.colorbar(sm, shrink=0.3)
-        cbar.ax.set_xlabel('ORC', labelpad=10, loc='center')
-        cbar.ax.xaxis.set_label_position('top') 
+        fig.update_layout(coloraxis=dict(colorscale='Viridis', colorbar=dict(title='Color')))
+    # marker colorbar
+    if node_colorbar:
+        fig.update_layout(coloraxis=dict(colorscale=cmap, colorbar=dict(title='Color')))
     if filename is not None and exp_name is not None:
         os.makedirs('figures', exist_ok=True)
         exp_dir = os.path.join('figures', exp_name)
         os.makedirs(exp_dir, exist_ok=True)
         path = os.path.join(exp_dir, filename)
-        plt.savefig(path)
+        fig.write_image(path)
+    return fig   
 
 def plot_data_3D(X, color, title, exp_name=None, filename=None, axes=False, node_size=3, opacity=1, cmap=None, labels=None, camera=None):
     # If labels are provided, we'll plot one trace per label/color group
@@ -261,76 +279,6 @@ def plot_graph_3D(X, graph, title, node_color='#1f78b4', node_size=3, edge_width
         fig.write_image(path)
     return fig   
 
-def plot_emb(Y, color, title, cmap=plt.cm.Spectral, exp_name=None, filename=None):
-    """
-    Plot the embedding of the data.
-    Parameters
-    
-    Y : array-like, shape (n_samples, 2)
-        The coordinates of the points in the embedding.
-    title : str
-        The title of the plot.
-    """
-    plt.figure(dpi=1200)
-    if Y.shape[1] == 1:
-        plt.scatter(Y, np.zeros(Y.shape), c=color, cmap=cmap, s=10)
-    else:
-        plt.scatter(Y[:, 0], Y[:, 1], c=color, cmap=cmap, s=10)
-    plt.title(title)
-    plt.gca().set_axis_off()
-    if filename is not None and exp_name is not None:
-        os.makedirs('figures', exist_ok=True)
-        exp_dir = os.path.join('figures', exp_name)
-        os.makedirs(exp_dir, exist_ok=True)
-        path = os.path.join(exp_dir, filename)
-        plt.savefig(path)
-
-def plot_barcode(dgms, exp_name=None, filename=None, thresh=None):
-    """
-    Plot a persistence barcode.
-    Parameters
-    ----------
-    dgms : list
-        List of persistence diagrams, where each element is a list [homology, persistence].
-    """
-    plt.figure()
-    ax = gudhi.plot_persistence_barcode(dgms, max_intervals=25, alpha=0.9, legend=False)
-    if thresh is not None:
-        ax.set_xlim([0, thresh])
-    if filename is not None and exp_name is not None:
-        os.makedirs('figures', exist_ok=True)
-        exp_dir = os.path.join('figures', exp_name)
-        os.makedirs(exp_dir, exist_ok=True)
-        path = os.path.join(exp_dir, filename)
-        plt.savefig(path)
-
-def plot_persistence_diagram(dgms, thresh=None, exp_name=None, filename=None):
-    """
-    Plot a persistence diagram.
-    Parameters
-    ----------
-    dgms : list
-        List of persistence diagrams, where each element is a list [homology, persistence].
-    """
-    # convert to persim format
-    plt.figure()
-    num_dims = len(np.unique([dgm[0] for dgm in dgms]))
-    dgms_converted = []
-    for dim in range(num_dims):
-        dgms_converted.append(np.array([dgm[1] for dgm in dgms if dgm[0] == dim]))
-    if thresh is not None:
-        xy_range = [-0.1, thresh, -0.1, thresh]
-    else:
-        xy_range = None
-    persim.plot_diagrams(dgms_converted, xy_range=xy_range)
-    if filename is not None and exp_name is not None:
-        os.makedirs('figures', exist_ok=True)
-        exp_dir = os.path.join('figures', exp_name)
-        os.makedirs(exp_dir, exist_ok=True)
-        path = os.path.join(exp_dir, filename)
-        plt.savefig(path)
-
-
 class animation:
 
     def configure_buttons(fig):
@@ -390,6 +338,31 @@ class animation:
     def animate_3D(frames):
         Xs, G = frames['Xs'], frames['G']
         figs = [plot_graph_3D(X, G, title=None) for X in Xs]
+        fig_dict = {
+            "data": figs[0]["data"],
+            "layout": figs[0]["layout"],
+            "frames": [go.Frame(data=fig["data"], name=str(i)) for i, fig in enumerate(figs)]
+        }
+        sliders_dict = animation.config_slider()
+        sliders_dict["steps"] = [
+            {
+                "args": [
+                    [step],
+                    {"frame": {"duration": 300, "redraw": True},
+                    "mode": "immediate",
+                    "transition": {"duration": 300}}
+                ],
+                "label": step,
+                "method": "animate"
+            }        
+        for step in range(len(figs))]
+        fig_dict["layout"]["sliders"] = [sliders_dict]
+        return fig_dict
+    
+    
+    def animate_2D(frames):
+        Xs, G = frames['Xs'], frames['G']
+        figs = [plot_graph_2D(X, G, title=None) for X in Xs]
         fig_dict = {
             "data": figs[0]["data"],
             "layout": figs[0]["layout"],
