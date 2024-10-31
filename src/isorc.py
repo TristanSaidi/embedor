@@ -30,8 +30,6 @@ class ISORC(object):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self._setup_structs()
         self._ann_summary(self.orcmanl.G_ann) # get the annotation summary
-        # self._eq_matrix() # compute the equilibrium matrix
-
 
     def _setup_structs(self):
         """
