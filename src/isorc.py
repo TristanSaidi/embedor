@@ -39,6 +39,8 @@ class ISORC(object):
             self.orcmanl = ORCManL(exp_params=exp_params, verbose=verbose)
         else:
             self.orcmanl = orcmanl
+        # get number of cc's in the pruned graph
+        self.n_cc = nx.number_connected_components(self.orcmanl.G_pruned)
         self.exp_params = self.orcmanl.exp_params
         self.verbose = verbose
         self.repulsion_scale = repulsion_scale
@@ -115,7 +117,11 @@ class ISORC(object):
         # scale eigenvectors to have similar scale as original data
         pw_dist_Y = scipy.spatial.distance.pdist(Y)
         max_pw_dist_Y = np.max(pw_dist_Y)
-        scale = self.repulsion_scale * self.max_non_shortcut_dist.cpu().numpy() / max_pw_dist_Y
+        scale = self.max_non_shortcut_dist.cpu().numpy() / max_pw_dist_Y
+        # if more than one connected component, scale by repulsion scale
+        if self.n_cc > 1:
+            print(f"Scaling by repulsion scale: {self.repulsion_scale}")
+            scale *= self.repulsion_scale
         Y *= scale
         return Y
 
@@ -164,7 +170,8 @@ class ISORC(object):
             beta=0,
             lr=0.1,
             num_frames=10,
-            spacing='log'
+            spacing='linear',
+            patience=5,
     ):
         """
         Fit the ISORC algorithm.
@@ -186,7 +193,10 @@ class ISORC(object):
             # add n_iter-1 to the list of frames
             save_frames = np.append(save_frames, n_iter-1)
         elif spacing == 'linear':
-            save_frames = np.linspace(start=0, stop=n_iter, num=frames)
+            save_frames = np.unique(np.linspace(start=0, stop=n_iter, num=num_frames).astype(int))
+            if save_frames[-1] != n_iter-1:
+                save_frames = np.append(save_frames, n_iter-1)
+        losses = []
         with tqdm(total=n_iter) as pbar:
             for i in range(n_iter):
                 optimizer.zero_grad()
@@ -198,16 +208,21 @@ class ISORC(object):
                 squared_diff = diff ** 2
                 # only consider target pairs with noninf geo distances
                 squared_diff = torch.masked_select(squared_diff, self.noninf_mask)
-                loss_geo = torch.sum(squared_diff)
-                loss_spread = - beta * fro_norm
+                loss_geo = torch.sum(squared_diff) / torch.sum(self.noninf_mask)
+                loss_spread = - beta * fro_norm / (self.X_opt.shape[0] ** 2)
                 loss = loss_geo + loss_spread
                 loss.backward()
-
+                
                 optimizer.step()
                 if i in save_frames:
                     frames.append(self.X_opt.clone().detach().cpu().numpy())
                 pbar.set_postfix({'loss': loss.item(), 'loss_geo': loss_geo.item(), 'loss_spread': loss_spread.item()})
                 pbar.update(1)
+                losses.append(loss.item())
+                if len(losses) > patience:
+                    if loss.item() > np.max(losses[-patience:]):
+                        print(f"Early stopping at iteration {i}")
+                        break
         return self.X_opt.detach().cpu().numpy(), frames
 
         
