@@ -148,6 +148,9 @@ class ISORC(object):
 
         self.geo_dist = scipy.sparse.csgraph.shortest_path(self.A, directed=False)
         self.geo_dist = torch.tensor(self.geo_dist).to(self.device)
+        # create a mask of noninf values
+        self.intracluster_mask = self.geo_dist != np.inf
+        self.intracluster_mask = self.intracluster_mask.to(self.device).requires_grad_(False)
 
         # max non-shortcut distance
         self.max_non_shortcut_dist = torch.max(self.geo_dist[self.geo_dist != np.inf]).detach()
