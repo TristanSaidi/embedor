@@ -68,7 +68,14 @@ class ISORC(object):
             self.inv_index_map[idx] = i
         # adjust indexing of A
         self.A = self.A[self.index_map][:, self.index_map]
-
+        # ORC -> weight
+        self.W = torch.tensor(
+            weight_fn(
+                self.orcmanl.orcs, 
+                self.orcmanl.G.edges,
+                len(self.G.nodes)
+            )
+        ).to(self.device).requires_grad_(False)
 
     def _init_emb(self, init, dim):
         """
@@ -171,8 +178,8 @@ class ISORC(object):
             self,
             n_iter=1000,
             beta=0,
-            lda=10,
             lr=0.1,
+            weight_orc=False,
             num_frames=10,
             spacing='linear',
             patience=5,
@@ -210,8 +217,9 @@ class ISORC(object):
                 # clamp elements specified by self.shortcut_indices to zero from below, as we dont want to penalize excess distance between shortcut pairs
                 diff[self.shortcut_indices] = torch.clamp(diff[self.shortcut_indices], min=0)
                 squared_diff = diff ** 2
-                # scale shortcut loss by lambda
-                squared_diff[self.shortcut_indices] *= lda
+                # weight squared_diff by ORC determined weights
+                if weight_orc:
+                    squared_diff = squared_diff * self.W
                 # only consider target pairs with noninf geo distances
                 squared_diff = torch.masked_select(squared_diff, self.noninf_mask)
                 loss_geo = torch.sum(squared_diff) / torch.sum(self.noninf_mask)
