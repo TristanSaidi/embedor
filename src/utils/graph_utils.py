@@ -272,3 +272,15 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     assert G.is_directed() == False, "The graph is directed."
     assert len(G.nodes()) == n_points, "The graph has isolated nodes."
     return G, A
+
+def weight_fn(orcs, edges, n):
+    """ 
+    Maps ORC values to loss weights.
+    weight_fn: [-2, 1] --> [0, 1]
+    """
+    W = np.zeros((n, n))
+    for idx, (i, j) in enumerate(edges):
+        weight = 1/3 * (orcs[idx] + 2)
+        weight = weight ** 0.5
+        W[i, j] = weight
+    return W

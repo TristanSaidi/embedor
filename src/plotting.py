@@ -36,7 +36,7 @@ def plot_data_2D(X, color, title, node_size=10, axes=False, exp_name=None, filen
         path = os.path.join(exp_dir, filename)
         plt.savefig(path)
 
-def plot_graph_2D(X, graph, title, node_color='#1f78b4', node_size=3, edge_width=0.5, edge_color='lightgrey', colorbar=False, camera=None, exp_name=None, filename=None, axes=False, cmap='Viridis', opacity=None, cmin=-1, cmax=1, node_colorbar=False, node_colorbar_title=None):
+def plot_graph_2D(X, graph, title, node_color='#1f78b4', edge_color='lightgray', node_size=1, edge_width=1.0, colorbar=False, exp_name=None, filename=None):
     """
     Plot the graph with the desired node or edge coloring.
     Parameters
@@ -52,67 +52,24 @@ def plot_graph_2D(X, graph, title, node_color='#1f78b4', node_size=3, edge_width
     edge_color : str
         The color of the edges.
     """
-    edge_x = []
-    edge_y = []
-    for edge in graph.edges():
-        x0, y0 = X[edge[0]]
-        x1, y1 = X[edge[1]]
-        edge_x += [x0, x1, None]
-        edge_y += [y0, y1, None]
-
-    edge_trace = go.Scatter(
-        x=edge_x, y=edge_y,
-        mode='lines',
-        line=dict(
-            width=edge_width,
-            color=edge_color,
-        ),
-        opacity=opacity,
-        showlegend=False
-    )
-    marker_data = go.Scatter(
-        x=X[:, 0],
-        y=X[:, 1],
-        mode='markers',
-        marker=dict(
-            size=node_size,
-            color=node_color,
-            colorbar=dict(
-                title=node_colorbar_title,
-                thickness=40,
-                xanchor='left',
-                titleside='right',
-                tickfont=dict(size=30),
-            ) if node_colorbar else None,
-            colorscale=cmap,
-            opacity=0.8,
-            cmin=cmin,
-            cmax=cmax
-        ),
-        showlegend=False
-    )
-    if node_size != 0:
-        fig = go.Figure(data=[edge_trace, marker_data])
+    if type(edge_color) == str:
+        edge_cmap = plt.cm.viridis
     else:
-        fig = go.Figure(data=[edge_trace])
-    fig.update_layout(title=title)
-    fig.update_layout(scene=dict(aspectmode='data'))
-    if camera is not None:
-        fig.update_layout(scene_camera=camera)
-    if not axes:
-        fig.update_layout(scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False)))
+        edge_cmap = plt.cm.coolwarm
+    plt.figure(dpi=1200)
+    nx.draw(graph, X, node_color=node_color, edge_color=edge_color, node_size=node_size, cmap=plt.cm.Spectral, edge_cmap=edge_cmap, edge_vmin=-1, edge_vmax=1, width=edge_width)
+    plt.title(title)
+    plt.gca().set_aspect('equal')
     if colorbar:
-        fig.update_layout(coloraxis=dict(colorscale='Viridis', colorbar=dict(title='Color')))
-    # marker colorbar
-    if node_colorbar:
-        fig.update_layout(coloraxis=dict(colorscale=cmap, colorbar=dict(title='Color')))
+        sm = plt.cm.ScalarMappable(cmap=plt.cm.coolwarm, norm=plt.Normalize(vmin=-1, vmax=1))
+        sm._A = []
+        plt.colorbar(sm)
     if filename is not None and exp_name is not None:
         os.makedirs('figures', exist_ok=True)
         exp_dir = os.path.join('figures', exp_name)
         os.makedirs(exp_dir, exist_ok=True)
         path = os.path.join(exp_dir, filename)
-        fig.write_image(path)
-    return fig   
+        plt.savefig(path)
 
 def plot_data_3D(X, color, title, exp_name=None, filename=None, axes=False, node_size=3, opacity=1, cmap=None, labels=None, camera=None):
     # If labels are provided, we'll plot one trace per label/color group
