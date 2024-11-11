@@ -171,6 +171,7 @@ class ISORC(object):
             self,
             n_iter=1000,
             beta=0,
+            lda=10,
             lr=0.1,
             num_frames=10,
             spacing='linear',
@@ -209,6 +210,8 @@ class ISORC(object):
                 # clamp elements specified by self.shortcut_indices to zero from below, as we dont want to penalize excess distance between shortcut pairs
                 diff[self.shortcut_indices] = torch.clamp(diff[self.shortcut_indices], min=0)
                 squared_diff = diff ** 2
+                # scale shortcut loss by lambda
+                squared_diff[self.shortcut_indices] *= lda
                 # only consider target pairs with noninf geo distances
                 squared_diff = torch.masked_select(squared_diff, self.noninf_mask)
                 loss_geo = torch.sum(squared_diff) / torch.sum(self.noninf_mask)
