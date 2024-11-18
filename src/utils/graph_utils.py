@@ -273,14 +273,15 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     assert len(G.nodes()) == n_points, "The graph has isolated nodes."
     return G, A
 
-def weight_fn(orcs, edges, n):
+def weight_fn(G):
     """ 
     Maps ORC values to loss weights.
     weight_fn: [-2, 1] --> [0, 1]
     """
+    n = len(G.nodes())
     W = np.zeros((n, n))
-    for idx, (i, j) in enumerate(edges):
-        weight = 1/3 * (orcs[idx] + 2)
-        weight = weight ** 0.5
+    for (i, j) in G.edges():
+        orc = G[i][j]['ricciCurvature']
+        weight = 1/3 * (orc + 2)
         W[i, j] = weight
     return W
