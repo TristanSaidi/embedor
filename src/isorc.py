@@ -171,77 +171,7 @@ class ISORC(object):
         # set shortcut weights to 1 if they exist
         if self.shortcut_indices.shape[0] > 0:
             self.W[self.shortcut_indices[:, 0], self.shortcut_indices[:, 1]] = 1
-        # correct indices
-        # self.W = self.W[self.index_map][:, self.index_map]
-        # self.W = torch.ones_like(self.W).to(self.device).requires_grad_(False) # testing without ORC weights
 
-
-
-    # def fit_iso(
-    #         self,
-    #         n_iter=1000,
-    #         beta=0.1,
-    #         lr=0.1,
-    #         weight_orc=False,
-    #         num_frames=10,
-    #         spacing='linear',
-    #         patience=5,
-    # ):
-    #     """
-    #     Fit the ISORC algorithm.
-    #     Parameters
-    #     ----------
-    #     n_iter : int, optional
-    #         The number of iterations.
-    #     lr : float, optional
-    #         The learning rate.
-    #     """
-    #     # optimize X so that pairwise distances are close to the equilibrium distances
-    #     self.X_opt = self.X.clone().detach().requires_grad_(True)
-    #     # optimizer and lr scheduler
-    #     optimizer = torch.optim.Adam([self.X_opt], lr=lr)
-    #     # animation
-    #     frames = [self.X_opt.clone().detach().cpu().numpy()]
-    #     if spacing == 'log':
-    #         save_frames = np.unique(np.logspace(start=0, stop=np.log10(n_iter), num=num_frames, endpoint=False).astype(int))
-    #         # add n_iter-1 to the list of frames
-    #         save_frames = np.append(save_frames, n_iter-1)
-    #     elif spacing == 'linear':
-    #         save_frames = np.unique(np.linspace(start=0, stop=n_iter, num=num_frames).astype(int))
-    #         if save_frames[-1] != n_iter-1:
-    #             save_frames = np.append(save_frames, n_iter-1)
-    #     losses = []
-    #     with tqdm(total=n_iter) as pbar:
-    #         for i in range(n_iter):
-    #             optimizer.zero_grad()
-    #             pdist = torch.cdist(self.X_opt, self.X_opt, p=2)
-    #             fro_norm = torch.norm(pdist)
-    #             diff = pdist - self.target_dist
-    #             # clamp elements specified by self.shortcut_indices to zero from below, as we dont want to penalize excess distance between shortcut pairs
-    #             diff[self.shortcut_indices] = torch.clamp(diff[self.shortcut_indices], min=0)
-    #             squared_diff = diff ** 2
-    #             # weight squared_diff by ORC determined weights
-    #             if weight_orc:
-    #                 squared_diff = squared_diff * self.W
-    #             # only consider target pairs with noninf geo distances
-    #             squared_diff = torch.masked_select(squared_diff, self.noninf_mask)
-    #             loss_geo = torch.sum(squared_diff) / torch.sum(self.noninf_mask)
-    #             loss_spread = - beta * fro_norm / (self.X_opt.shape[0] ** 2)
-    #             loss = loss_geo + loss_spread
-    #             loss.backward()
-                
-    #             optimizer.step()
-    #             if i in save_frames:
-    #                 frames.append(self.X_opt.clone().detach().cpu().numpy())
-    #             pbar.set_postfix({'loss': loss.item(), 'loss_geo': loss_geo.item(), 'loss_spread': loss_spread.item()})
-    #             pbar.update(1)
-    #             losses.append(loss.item())
-    #             if len(losses) > patience:
-    #                 if loss.item() > np.max(losses[-patience:]):
-    #                     print(f"Early stopping at iteration {i}")
-    #                     break
-    #     return self.X_opt.detach().cpu().numpy(), frames
-        
     def fit_graph(
                 self,
                 n_iter=1000,
@@ -262,6 +192,7 @@ class ISORC(object):
             """
             # optimize X so that pairwise distances are close to the equilibrium distances
             self.X_opt = self.X.clone().detach().requires_grad_(True)
+            self.W_p = self.W ** p
             # optimizer and lr scheduler
             optimizer = torch.optim.Adam([self.X_opt], lr=lr)
             # animation
@@ -274,7 +205,7 @@ class ISORC(object):
                     # clamp elements specified by self.shortcut_indices to zero from below, as we dont want to penalize excess distance between shortcut pairs
                     squared_diff = torch.abs(diff) ** 2
                     if weight_orc:
-                        squared_diff = squared_diff * (self.W ** p) # element-wise multiplication
+                        squared_diff = squared_diff * self.W_p # element-wise multiplication
                     # only consider target pairs with noninf geo distances
                     squared_diff = torch.masked_select(squared_diff, self.adj_mask)
                     loss_geo = torch.sum(squared_diff)
@@ -294,54 +225,3 @@ class ISORC(object):
                             print(f"Early stopping at iteration {i}")
                             break
             return self.X_opt.detach().cpu().numpy(), losses
-
-
-    # def fit_both(
-    #             self,
-    #             n_iter=1000,
-    #             beta=0,
-    #             lr=0.1,
-    #             patience=5,
-    #     ):
-    #         """
-    #         Fit the ISORC algorithm.
-    #         Parameters
-    #         ----------
-    #         n_iter : int, optional
-    #             The number of iterations.
-    #         lr : float, optional
-    #             The learning rate.
-    #         """
-    #         # optimize X so that pairwise distances are close to the equilibrium distances
-    #         self.X_opt = self.X.clone().detach().requires_grad_(True)
-    #         # optimizer and lr scheduler
-    #         optimizer = torch.optim.Adam([self.X_opt], lr=lr)
-    #         # animation
-    #         losses = []
-    #         with tqdm(total=n_iter) as pbar:
-    #             for i in range(n_iter):
-    #                 optimizer.zero_grad()
-    #                 pdist = torch.cdist(self.X_opt, self.X_opt, p=2)
-    #                 fro_norm = torch.norm(pdist) ** 2
-    #                 diff = pdist - self.target_dist
-    #                 # clamp elements specified by self.shortcut_indices to zero from below, as we dont want to penalize excess distance between shortcut pairs
-    #                 diff[self.shortcut_indices] = torch.clamp(diff[self.shortcut_indices], min=0)
-    #                 squared_diff = diff ** 2
-    #                 # only consider target pairs with noninf geo distances
-    #                 squared_diff_adj = torch.masked_select(squared_diff, self.adj_mask)
-    #                 loss_adj = torch.sum(squared_diff_adj) / torch.sum(self.adj_mask)
-    #                 squared_diff_geo = torch.masked_select(squared_diff, self.noninf_mask)
-    #                 loss_geo = torch.sum(squared_diff_geo) / torch.sum(self.noninf_mask)
-    #                 loss_spread = - beta * fro_norm / (pdist.numel())
-    #                 loss = loss_geo + loss_adj + loss_spread
-    #                 loss.backward()
-                    
-    #                 optimizer.step()
-    #                 pbar.set_postfix({'loss': loss.item(), 'loss_geo': loss_geo.item(), 'loss_spread': loss_spread.item()})
-    #                 pbar.update(1)
-    #                 losses.append(loss.item())
-    #                 if len(losses) > patience:
-    #                     if loss.item() > np.max(losses[-patience:]):
-    #                         print(f"Early stopping at iteration {i}")
-    #                         break
-    #         return self.X_opt.detach().cpu().numpy()
