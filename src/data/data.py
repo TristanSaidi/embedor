@@ -63,7 +63,7 @@ def concentric_circles(n_points, factor, noise, supersample=False, supersample_f
     return return_dict
 
 
-def quadratics(n_points, noise, supersample=False, supersample_factor=2.5, noise_thresh=0.275):
+def quadratics(n_points, noise, supersample=False, supersample_factor=2.5, noise_thresh=0.275, n_clusters=3):
     """
     Generate a dataset of quadratics.
     Parameters
@@ -84,15 +84,29 @@ def quadratics(n_points, noise, supersample=False, supersample_factor=2.5, noise
     subsample_indices : list
         The indices of the subsampled samples.
     """
-    
+    if n_clusters not in [2,3]:
+        raise NotImplementedError("Only 2 or 3 clusters are supported.")
     X = np.random.uniform(-2, 2, (n_points, 1))
     Y = np.zeros((n_points, 1))
-    # bernoulli with p = 0.5 for each point
-    labels = np.random.binomial(1, 0.5, n_points)
-    Y[labels == 0] = 0.2*X[labels == 0]**2
-    Y[labels == 1] = 0.3*X[labels == 1]**2 + 1
-    data = np.concatenate([X, Y], axis=1)
+    # # bernoulli with p = 0.5 for each point
+    # labels = np.random.binomial(1, 0.5, n_points)
+    # Y[labels == 0] = 0.2*X[labels == 0]**2
+    # Y[labels == 1] = 0.3*X[labels == 1]**2 + 1
+    # data = np.concatenate([X, Y], axis=1)
+    random = np.random.rand(n_points) # random number between 0 and 1
+    labels = np.zeros(n_points)
+    if n_clusters == 3:
+        labels[random < 0.33] = 0
+        labels[(random >= 0.33) & (random < 0.66)] = 1
+        labels[random >= 0.66] = 2
+    else:
+        labels[random < 0.5] = 0
+        labels[random >= 0.5] = 1
+    
+    for label in np.unique(labels):
+        Y[labels == label] = 0.2*X[labels == label]**2 + label
 
+    data = np.concatenate([X, Y], axis=1)
     # clip noise and resample if necessary
     z = noise*np.random.randn(n_points, 2)
     resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
