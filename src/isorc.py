@@ -1,8 +1,10 @@
 import numpy as np
+import scipy.spatial
 from src.orcml import *
 from src.utils.graph_utils import *
 from src.plotting import *
 from sklearn import manifold
+from sklearn import decomposition
 from tqdm import tqdm
 import torch
 
@@ -39,8 +41,7 @@ class ISORC(object):
             self.orcmanl = ORCManL(exp_params=exp_params, verbose=verbose)
         else:
             self.orcmanl = orcmanl
-        # get number of cc's in the pruned graph
-        self.n_cc = nx.number_connected_components(self.orcmanl.G_pruned)
+        self._configure_clusters()
         self.exp_params = self.orcmanl.exp_params
         self.verbose = verbose
         self.repulsion_scale = repulsion_scale
@@ -49,7 +50,8 @@ class ISORC(object):
         self._ann_summary(self.orcmanl.G_ann) # get the annotation summary
         # embedding map
         self.emb_map = {
-            'spectral': self._spectral
+            'spectral': self._spectral,
+            'pca': self._pca
         }
         self._init_emb(init, dim)
 
@@ -120,7 +122,66 @@ class ISORC(object):
             scale *= self.repulsion_scale
         Y *= scale
         return Y
+    
+    def _pca(self, n_components):
+        """
+        Compute the PCA of the data.
+        Parameters
+        ----------
+        n_components : int
+            The number of components to keep.
+        Returns
+        -------
+        Y : array-like, shape (n_samples, n_components)
+            The PCA of the data.
+        """
+        Y = decomposition.PCA(n_components=n_components).fit_transform(self.orcmanl.X)
+        pw_dist_Y = scipy.spatial.distance.pdist(Y)
+        max_pw_dist_Y = np.max(pw_dist_Y)
+        scale = self.max_non_shortcut_dist.cpu().numpy() / max_pw_dist_Y
+        # if more than one connected component, scale by repulsion scale
+        if self.n_cc > 1:
+            print(f"Scaling by repulsion scale: {self.repulsion_scale}")
+            scale *= self.repulsion_scale
+        Y *= scale
+        return Y
 
+    def _configure_clusters(self):
+        """
+        Configure the clusters.
+        """
+        connected_components = list(nx.connected_components(self.orcmanl.G_pruned))
+        self.n_cc = len(connected_components)
+        self.pruned_labels = np.arange(self.n_cc)
+        self.pruned_assignments = np.zeros(len(self.orcmanl.G_pruned.nodes()), dtype=int)
+        for i, cc in enumerate(connected_components):
+            self.pruned_assignments[list(cc)] = i
+        
+        self.hausdorff_matrix = np.zeros((self.n_cc, self.n_cc))
+        for i in range(self.n_cc):
+            for j in range(self.n_cc):
+                self.hausdorff_matrix[i, j] = self._hausdorff_distance(
+                    self.orcmanl.X[self.pruned_assignments == i],
+                    self.orcmanl.X[self.pruned_assignments == j]
+                )
+
+    def _hausdorff_distance(self, A, B):
+        """
+        Compute the Hausdorff distance between two sets.
+        Parameters
+        ----------
+        A : array-like
+            The first set.
+        B : array-like
+            The second set.
+        Returns
+        -------
+        d : float
+            The Hausdorff distance.
+        """
+        h_AB = scipy.spatial.distance.directed_hausdorff(A, B)[0]
+        h_BA = scipy.spatial.distance.directed_hausdorff(B, A)[0]
+        return max(h_AB, h_BA)
 
     def _ann_summary(self, G):
         """
@@ -156,7 +217,9 @@ class ISORC(object):
         self.target_dist = self.geo_dist.clone().requires_grad_(False)
         for u, v in shortcut_indices:
             if self.target_dist[u, v] == np.inf:
-                self.target_dist[u, v] = self.repulsion_scale * self.max_non_shortcut_dist
+                cluster_u = self.pruned_assignments[u]
+                cluster_v = self.pruned_assignments[v]
+                self.target_dist[u, v] = self.hausdorff_matrix[cluster_u, cluster_v]
         # create a mask of noninf values
         self.noninf_mask = self.target_dist != np.inf
         self.noninf_mask = self.noninf_mask.to(self.device).requires_grad_(False)
