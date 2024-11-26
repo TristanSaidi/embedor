@@ -18,6 +18,7 @@ class ORCManL(object):
     def __init__(
             self, 
             exp_params=default_exp_params, 
+            nbrhood_size=1,
             verbose=False, 
             reattach=True
         ):
@@ -37,6 +38,7 @@ class ORCManL(object):
             self.exp_params['epsilon'] = None
         if 'n_neighbors' not in exp_params:
             self.exp_params['n_neighbors'] = None
+        self.nbrhood_size = nbrhood_size
         self.verbose = verbose
         self.reattach = reattach
         self._setup_structs()
@@ -82,7 +84,7 @@ class ORCManL(object):
         G = return_dict['G']
         self.A = return_dict['A']
         # compute ORC
-        return_dict = compute_orc(G)
+        return_dict = compute_orc(G, self.nbrhood_size)
         self.G = return_dict['G']
         self.orcs = return_dict['orcs']
 

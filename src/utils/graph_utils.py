@@ -60,19 +60,21 @@ def compute_eff_eps_adj(A, n_neighbors, edge):
     effective_eps = max(effective_eps_i, effective_eps_j)
     return effective_eps
 
-def compute_orc(G):
+def compute_orc(G, nbrhood_size=1):
     """
     Compute the Ollivier-Ricci curvature on edges of a graph.
     Parameters
     ----------
     G : networkx.Graph
         The graph.
+    nbrhood_size : int, optional
+        Number of hops to consider for neighborhood.
     Returns
     -------
     G : networkx.Graph
         The graph with the Ollivier-Ricci curvatures as edge attributes.
     """
-    orc = OllivierRicci(G, weight="effective_eps", alpha=0.0, method='OTD', verbose='INFO')
+    orc = OllivierRicci(G, weight="effective_eps", alpha=0.0, method='OTD', verbose='INFO', nbrhood_size=nbrhood_size)
     orc.compute_ricci_curvature()
     orcs = []
     for i, j, _ in orc.G.edges(data=True):
