@@ -62,6 +62,7 @@ class ISORC(object):
         # grab graph from ORCManL
         self.G = self.orcmanl.G_pruned
         self.A = self.orcmanl.A_pruned
+        self.A_unpruned = self.orcmanl.A
 
         self.index_map = np.array(np.argsort(self.G.nodes))
         # inverse index map
@@ -73,7 +74,8 @@ class ISORC(object):
         # create adjacency mask
         self.adj_mask = torch.tensor(self.A != 0)
         self.adj_mask = self.adj_mask.to(self.device).requires_grad_(False)
-
+        self.adj_mask_unpruned = torch.tensor(self.A_unpruned != 0)
+        self.adj_mask_unpruned = self.adj_mask_unpruned.to(self.device).requires_grad_(False)
 
     def _init_emb(self, init, dim):
         """
@@ -213,13 +215,15 @@ class ISORC(object):
         self.max_non_shortcut_dist = torch.max(self.geo_dist[self.geo_dist != np.inf]).detach()
         print(f"Max non-shortcut distance: {self.max_non_shortcut_dist}")
 
-        # target distances are geo distances, and max non-shortcut distance for shortcut edges where geo distance is infinite
+        # target distances are geo distances through pruned graph
         self.target_dist = self.geo_dist.clone().requires_grad_(False)
         for u, v in shortcut_indices:
             if self.target_dist[u, v] == np.inf:
                 cluster_u = self.pruned_assignments[u]
                 cluster_v = self.pruned_assignments[v]
                 self.target_dist[u, v] = self.hausdorff_matrix[cluster_u, cluster_v]
+            else:
+                self.target_dist[u, v] = self.target_dist[u, v]
         # create a mask of noninf values
         self.noninf_mask = self.target_dist != np.inf
         self.noninf_mask = self.noninf_mask.to(self.device).requires_grad_(False)
@@ -238,7 +242,7 @@ class ISORC(object):
     def fit_graph(
                 self,
                 n_iter=1000,
-                beta=1e-3,
+                beta=0.01,
                 weight_orc=True,
                 p=10,
                 lr=0.1,
@@ -266,11 +270,13 @@ class ISORC(object):
                     pdist = torch.cdist(self.X_opt, self.X_opt, p=2)
                     diff = self.target_dist - pdist
                     # clamp elements specified by self.shortcut_indices to zero from below, as we dont want to penalize excess distance between shortcut pairs
+                    diff[self.shortcut_indices[:, 0], self.shortcut_indices[:, 1]] = torch.clamp(diff[self.shortcut_indices[:, 0], self.shortcut_indices[:, 1]], min=0)
+                    # element-wise square of the difference
                     squared_diff = torch.abs(diff) ** 2
                     if weight_orc:
                         squared_diff = squared_diff * self.W_p # element-wise multiplication
-                    # only consider target pairs with noninf geo distances
-                    squared_diff = torch.masked_select(squared_diff, self.adj_mask)
+                    # only consider pairs connected by an edge
+                    squared_diff = torch.masked_select(squared_diff, self.adj_mask_unpruned)
                     loss_geo = torch.sum(squared_diff)
                     # compute the covariance matrix of the data
                     cov = torch.cov(self.X_opt)
