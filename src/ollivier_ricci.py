@@ -425,7 +425,6 @@ def _compute_ricci_curvature_edges(G: nx.Graph, weight="weight", edge_list=[],
     _nbr_topk = nbr_topk
     _nbrhood_size = nbrhood_size
     
-    print("nbrhood_size", nbrhood_size)
     # Construct nx to nk dictionary
     nx2nk_ndict, nk2nx_ndict = {}, {}
     for idx, n in enumerate(G.nodes()):
