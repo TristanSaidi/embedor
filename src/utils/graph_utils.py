@@ -287,3 +287,25 @@ def weight_fn(G):
         weight = 1/3 * (orc + 2)
         W[i, j] = weight
     return W
+
+def lb_distance(k_ij, d_ij, tau):
+    """
+    Computes the distance of an edge using the logarithmic barrier function 
+    """
+    return -1/tau * np.log(k_ij + 2) + (d_ij * tau + np.log(3))/tau
+
+def compute_lb_distances(G, tau, rep_factor):
+    """
+    Computes the distances of all edges in a graph under the logarithmic barrier function
+    """
+    orcs = []
+    kdists = []
+    for u, v in G.edges():
+        k_ij = G[u][v]['ricciCurvature']
+        if G[u][v]['shortcut'] == 1:
+            G[u][v]['weight'] = G[u][v]['weight'] * rep_factor
+        d_ij = G[u][v]['weight']
+        G[u][v]['lb_distance'] = lb_distance(k_ij, d_ij, tau)
+        kdists.append(G[u][v]['lb_distance'])
+        orcs.append(k_ij)
+    return G, kdists, orcs

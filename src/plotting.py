@@ -57,7 +57,12 @@ def plot_graph_2D(X, graph, title, node_color='#1f78b4', edge_color='lightgray',
     else:
         edge_cmap = plt.cm.coolwarm
     plt.figure(dpi=1200, figsize=(6, 6))
-    nx.draw(graph, X, node_color=node_color, edge_color=edge_color, node_size=node_size, cmap=plt.cm.Spectral, edge_cmap=edge_cmap, edge_vmin=-1, edge_vmax=1, width=edge_width)
+    if type(edge_color) != str:
+        edge_vmin = np.min(edge_color)
+        edge_vmax = np.max(edge_color)
+    else:
+        edge_vmin, edge_vmax = -1, 1
+    nx.draw(graph, X, node_color=node_color, edge_color=edge_color, node_size=node_size, cmap=plt.cm.Spectral, edge_cmap=edge_cmap, edge_vmin=edge_vmin, edge_vmax=edge_vmax, width=edge_width)
     plt.title(title)
     plt.gca().set_aspect('equal')
     if colorbar:

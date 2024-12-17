@@ -2,6 +2,7 @@ import numpy as np
 import scipy.spatial
 from src.orcml import *
 from src.utils.graph_utils import *
+from src.utils.sp_utils import *
 from src.plotting import *
 from sklearn import manifold
 from sklearn import decomposition
@@ -9,7 +10,77 @@ from tqdm import tqdm
 import torch
 
 
+
 class ISORC(object):
+
+    def __init__(
+            self, 
+            orcmanl=None, 
+            exp_params=default_exp_params, 
+            verbose=False,
+            repulsion_scale=10.0,
+            temperature=0.1
+        ):
+
+        """ 
+        Initialize the ISORC algorithm.
+        Parameters
+        ----------
+        orcmanl : ORCManL
+            The ORCManL object.
+        exp_params : dict
+            The experimental parameters. Includes 'mode', 'n_neighbors', 'epsilon', 'lda', 'delta'.
+        dim : int, optional
+            The dimensionality of the embedding (if any).
+        """
+        # dim must be int if init != 'ambient'
+        if orcmanl is None:
+            self.orcmanl = ORCManL(exp_params=exp_params, verbose=verbose)
+        else:
+            self.orcmanl = orcmanl
+        self.exp_params = self.orcmanl.exp_params
+        self.verbose = verbose
+        self.repulsion_scale = repulsion_scale
+        self.temperature = temperature
+        self.X = None
+        self._configure_graph()
+
+    def _configure_graph(self):
+        # compute log-barrier distances
+        self.G, self.lb_dists, _ = compute_lb_distances(
+            self.orcmanl.G_ann, 
+            self.temperature,
+            self.repulsion_scale
+        )
+        self.apsp_euc, self.apsp_lb = compute_apsp_with_dual_weights_multiprocessing(
+            self.G,
+            weight_B='weight',
+            weight_A='lb_dist'
+        )
+
+    def fit_kPCA(
+            self,
+            n_components=2,
+            distances='euclidean'
+        ):
+        """
+        Fit the kernel PCA algorithm.
+        Parameters
+        ----------
+        n_components : int, optional
+            The number of components to keep.
+        kernel : str, optional
+            The kernel to use.
+        gamma : float, optional
+            The gamma parameter for the kernel.
+        """
+        input = self.apsp_euc if distances == 'euclidean' else self.apsp_lb
+        self.kpca = manifold.Isomap(n_components=n_components, metric='precomputed')
+        self.X = self.kpca.fit_transform(input)
+        return self.X
+
+
+class ISORCgrad(object):
 
     def __init__(
             self, 

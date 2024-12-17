@@ -63,7 +63,7 @@ def concentric_circles(n_points, factor, noise, supersample=False, supersample_f
     return return_dict
 
 
-def quadratics(n_points, noise, supersample=False, supersample_factor=2.5, noise_thresh=0.275, n_clusters=3):
+def quadratics(n_points, noise, supersample=False, supersample_factor=2.5, noise_thresh=0.275, n_clusters=2):
     """
     Generate a dataset of quadratics.
     Parameters
