@@ -18,12 +18,13 @@ def process_row(args):
             if prev == -9999:  # Path does not exist
                 total_weight_A = np.inf
                 break
+            assert A_euc_distance[prev, current] != 0, f"Zero distance between {prev} and {current}"
             total_weight_A += A_euc_distance[prev, current]
             current = prev
         row_distances[j] = total_weight_A
     return i, row_distances
 
-def compute_apsp_with_dual_weights_multiprocessing(G, weight_B, weight_A):
+def compute_apsp_with_dual_weights_multiprocessing(G, weight_A, weight_B):
     """
     Compute the all-pairs shortest path matrix where:
     - Paths are shortest with respect to 'weight_B'.
@@ -31,9 +32,14 @@ def compute_apsp_with_dual_weights_multiprocessing(G, weight_B, weight_A):
     
     This version parallelizes path reconstruction and weight accumulation using multiprocessing.
     """
+
     # Step 1: Get adjacency matrices for both weights
     A_kernel_distance = nx.to_numpy_array(G, weight=weight_B)
     A_euc_distance = nx.to_numpy_array(G, weight=weight_A)
+
+    # assert symmetric matrices
+    assert np.allclose(A_kernel_distance, A_kernel_distance.T)
+    assert np.allclose(A_euc_distance, A_euc_distance.T)
 
     # Step 2: Compute shortest paths and predecessors with respect to 'weight_B'
     apsp_weight_B, predecessors = shortest_path(
@@ -44,13 +50,24 @@ def compute_apsp_with_dual_weights_multiprocessing(G, weight_B, weight_A):
     n = A_kernel_distance.shape[0]
     apsp_weight_A = np.zeros((n, n))
 
-    args = [(i, predecessors, A_euc_distance, n) for i in range(n)]
+    # args = [(i, predecessors, A_euc_distance, n) for i in range(n)]
 
-    with Pool() as pool:
-        results = pool.map(process_row, args)
+    # with Pool() as pool:
+    #     results = pool.map(process_row, args)
 
-    # Step 4: Populate the APSP matrix
-    for i, row_distances in results:
-        apsp_weight_A[i] = row_distances
+    # # Step 4: Populate the APSP matrix
+    # for i, row_distances in results:
+    #     apsp_weight_A[i] = row_distances
+
+    # # Step 5: Return the symmetrized APSP matrices
+    # apsp_weight_A = np.maximum(apsp_weight_A, apsp_weight_A.T)
+    # print(np.argwhere(apsp_weight_A != apsp_weight_A.T))
+    # print(np.argwhere(apsp_weight_A != apsp_weight_A.T).shape)
+    # print(apsp_weight_A)
+
+    # apsp_weight_B = np.minimum(apsp_weight_B, apsp_weight_B.T)
+
+    # assert np.allclose(apsp_weight_A, apsp_weight_A.T)
+    # assert np.allclose(apsp_weight_B, apsp_weight_B.T)
 
     return apsp_weight_A, apsp_weight_B

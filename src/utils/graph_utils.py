@@ -288,11 +288,19 @@ def weight_fn(G):
         W[i, j] = weight
     return W
 
-def lb_distance(k_ij, d_ij, tau):
-    """
-    Computes the distance of an edge using the logarithmic barrier function 
-    """
-    return -1/tau * np.log(k_ij + 2) + (d_ij * tau + np.log(3))/tau
+# def lb_distance(k_ij, d_ij, tau):
+#     """
+#     Computes the distance of an edge using the logarithmic barrier function 
+#     """
+#     # return -1/tau * np.log(k_ij + 2) + (d_ij * tau + np.log(3))/tau
+#     # return 1/(tau*(k_ij + 2)**2) + (d_ij-(1/9*tau))
+#     # return np.maximum(-tau * k_ij + d_ij, d_ij)
+#     # return np.exp(1/(tau * (k_ij + 2))) + (d_ij - np.exp(1/(3*tau)))
+#     # return np.maximum(1/(tau*(k_ij+2))+(d_ij-0.5/(tau)), d_ij)
+#     return d_ij * (1 + (1/(0.01 * (k_ij + 2)**tau)))
+
+def lb_distance(x, d, t, a=0.01):
+    return d*(1/(a*(x+2)**t) + (1-(1/(a*3**t))))
 
 def compute_lb_distances(G, tau, rep_factor):
     """
@@ -302,10 +310,11 @@ def compute_lb_distances(G, tau, rep_factor):
     kdists = []
     for u, v in G.edges():
         k_ij = G[u][v]['ricciCurvature']
-        if G[u][v]['shortcut'] == 1:
-            G[u][v]['weight'] = G[u][v]['weight'] * rep_factor
+        # if G[u][v]['shortcut'] == 1:
+        #     G[u][v]['weight'] = G[u][v]['weight'] * 10
         d_ij = G[u][v]['weight']
-        G[u][v]['lb_distance'] = lb_distance(k_ij, d_ij, tau)
+        # d_ij = 1
+        G[u][v]['lb_distance'] = d_ij * lb_distance(k_ij, d_ij, tau)
         kdists.append(G[u][v]['lb_distance'])
         orcs.append(k_ij)
     return G, kdists, orcs

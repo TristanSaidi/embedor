@@ -4,6 +4,7 @@ from src.orcml import *
 from src.utils.graph_utils import *
 from src.utils.sp_utils import *
 from src.plotting import *
+from src.utils.embeddings import *
 from sklearn import manifold
 from sklearn import decomposition
 from tqdm import tqdm
@@ -48,20 +49,21 @@ class ISORC(object):
     def _configure_graph(self):
         # compute log-barrier distances
         self.G, self.lb_dists, _ = compute_lb_distances(
-            self.orcmanl.G_ann, 
+            self.orcmanl.G_ann.copy(), 
             self.temperature,
             self.repulsion_scale
         )
         self.apsp_euc, self.apsp_lb = compute_apsp_with_dual_weights_multiprocessing(
             self.G,
-            weight_B='weight',
-            weight_A='lb_dist'
+            weight_A='weight',
+            weight_B='lb_distance'
         )
+        assert np.allclose(self.apsp_euc, self.apsp_euc.T), "APSP matrix must be symmetric."
+        assert np.allclose(self.apsp_lb, self.apsp_lb.T), "APSP matrix must be symmetric."
 
-    def fit_kPCA(
+    def fit_isomap(
             self,
             n_components=2,
-            distances='euclidean'
         ):
         """
         Fit the kernel PCA algorithm.
@@ -74,9 +76,32 @@ class ISORC(object):
         gamma : float, optional
             The gamma parameter for the kernel.
         """
-        input = self.apsp_euc if distances == 'euclidean' else self.apsp_lb
-        self.kpca = manifold.Isomap(n_components=n_components, metric='precomputed')
-        self.X = self.kpca.fit_transform(input)
+        self.iso = Isomap(n_components=n_components, metric='precomputed')
+        self.X = self.iso.fit_transform(self.apsp_lb)
+        return self.X
+    
+    def fit_MDS(
+            self,
+            n_components=2,
+        ):
+        """
+        Fit the MDS algorithm.
+        Parameters
+        ----------
+        n_components : int, optional
+            The number of components to keep.
+        kernel : str, optional
+            The kernel to use.
+        gamma : float, optional
+            The gamma parameter for the kernel.
+        """
+        self.mds = manifold.MDS(
+            n_components=n_components, 
+            dissimilarity='precomputed',
+            verbose=10,
+            n_init=1
+        )
+        self.X = self.mds.fit_transform(self.apsp_lb)
         return self.X
 
 
