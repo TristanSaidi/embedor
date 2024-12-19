@@ -3,6 +3,7 @@ import numpy as np
 import numpy as np
 from sklearn import neighbors
 from src.ollivier_ricci import OllivierRicci
+import pynndescent
 import multiprocessing as mp
 import tqdm
 
@@ -214,8 +215,10 @@ def get_nn_graph(data, exp_params):
     """
     if exp_params['mode'] == 'nbrs':
         G, A = _get_nn_graph(data, mode=exp_params['mode'], n_neighbors=exp_params['n_neighbors']) # unpruned k-nn graph
-    else:
+    elif exp_params['mode'] == 'eps':
         G, A = _get_nn_graph(data, mode=exp_params['mode'], epsilon=exp_params['epsilon'])
+    elif exp_params['mode'] == 'descent':
+        G, A = _get_nn_graph(data, mode=exp_params['mode'], n_neighbors=exp_params['n_neighbors'])
     return {
         "G": G,
         "A": A,
@@ -230,7 +233,7 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     X : array-like, shape (n_samples, n_features)
         The dataset.
     mode : str, optional
-        The mode of the graph construction. Either 'nbrs' or 'eps'.
+        The mode of the graph construction. Either 'nbrs' or 'eps' or 'descent'.
     n_neighbors : int, optional
         The number of neighbors to consider when mode='nbrs'.
     epsilon : float, optional
@@ -247,10 +250,27 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     elif mode == 'eps':
         assert epsilon is not None, "epsilon must be specified when mode='eps'."
         A = neighbors.radius_neighbors_graph(X, radius=epsilon, mode='distance')
+    elif mode == 'descent':
+        knn_search_index = pynndescent.NNDescent(
+            n_neighbors=n_neighbors,
+            data=X,
+            metric='euclidean',
+            verbose=False
+        )
+        indices, distances = knn_search_index.neighbor_graph
+        # convert to adjacency matrix
+        A = np.zeros((X.shape[0], X.shape[0]))
+        for i, knn_i in enumerate(indices):
+            d_knn_i = distances[i]
+            for j, d_ij in zip(knn_i, d_knn_i):
+                A[i, j] = d_ij
+                A[j, i] = d_ij
     else:
         raise ValueError("Invalid mode. Choose 'nbrs' or 'eps'.")
     # symmetrize the adjacency matrix
-    A = np.maximum(A.toarray(), A.toarray().T)
+    if type(A) != np.ndarray:
+        A = A.toarray()
+    A = np.maximum(A, A.T)
     assert np.allclose(A, A.T), "The adjacency matrix is not symmetric."
     # convert to networkx graph and symmetrize A
     n_points = X.shape[0]
