@@ -2,7 +2,6 @@ import numpy as np
 import scipy.spatial
 from src.orcml import *
 from src.utils.graph_utils import *
-from src.utils.sp_utils import *
 from src.plotting import *
 from src.utils.embeddings import *
 from sklearn import manifold
@@ -19,7 +18,7 @@ class ISORC(object):
             orcmanl=None, 
             exp_params=default_exp_params, 
             verbose=False,
-            repulsion_scale=10.0,
+            uniform=False,
             temperature=0.1
         ):
 
@@ -40,26 +39,60 @@ class ISORC(object):
         else:
             self.orcmanl = orcmanl
         self.exp_params = self.orcmanl.exp_params
+        self.k = self.exp_params['n_neighbors']
         self.verbose = verbose
-        self.repulsion_scale = repulsion_scale
         self.temperature = temperature
+        self.uniform = uniform
         self.X = None
         self._configure_graph()
 
     def _configure_graph(self):
-        # compute log-barrier distances
-        self.G, self.lb_dists, _ = compute_lb_distances(
+        # compute energies
+        self.G, self.energies, _ = compute_energies(
             self.orcmanl.G_ann.copy(), 
             self.temperature,
-            self.repulsion_scale
         )
-        self.apsp_euc, self.apsp_lb = compute_apsp_with_dual_weights_multiprocessing(
-            self.G,
-            weight_A='weight',
-            weight_B='lb_distance'
-        )
-        assert np.allclose(self.apsp_euc, self.apsp_euc.T), "APSP matrix must be symmetric."
-        assert np.allclose(self.apsp_lb, self.apsp_lb.T), "APSP matrix must be symmetric."
+        self.A_energy = nx.to_numpy_array(self.G, weight='energy')
+        self.apsp_energy = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
+        
+        self.A_euc = nx.to_numpy_array(self.G, weight='weight')
+        self.apsp_euc = scipy.sparse.csgraph.shortest_path(self.A_euc, unweighted=False, directed=False)
+        # if we want uniformity wrt the metric (as in UMAP)
+        if self.uniform:
+            # normalize so kth nearest neighbor is 1
+            sorted_apsp = np.sort(self.apsp_energy, axis=1)
+            k_nn_dist = sorted_apsp[:, self.k]
+            self.apsp_energy = self.apsp_energy / k_nn_dist[:, None]
+            # symmetrize
+            self.apsp_energy = (self.apsp_energy + self.apsp_energy.T) / 2
+
+            # repeat for euc
+            sorted_apsp = np.sort(self.apsp_euc, axis=1)
+            k_nn_dist = sorted_apsp[:, self.k]
+            self.apsp_euc = self.apsp_euc / k_nn_dist[:, None]
+            # symmetrize
+            self.apsp_euc = (self.apsp_euc + self.apsp_euc.T) / 2
+
+        assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
+
+    def _spectral_init(self, n_components):
+        """
+        Compute the spectral embedding of a graph.
+        Parameters
+        ----------
+        A : array-like, shape (n_samples, n_samples)
+            The adjacency matrix of the graph.
+        n_components : int
+            The number of components to keep.
+        Returns
+        -------
+        Y : array-like, shape (n_samples, n_components)
+            The spectral embedding of the graph.
+        """
+        A = self.A_energy.copy()
+        A = np.exp(-A / 2)
+        Y = manifold.spectral_embedding(n_components=n_components, adjacency=A) # unpruned adjacency
+        return Y
 
     def fit_isomap(
             self,
@@ -77,32 +110,43 @@ class ISORC(object):
             The gamma parameter for the kernel.
         """
         self.iso = Isomap(n_components=n_components, metric='precomputed')
-        self.X = self.iso.fit_transform(self.apsp_lb)
+        self.X = self.iso.fit_transform(self.apsp_energy)
         return self.X
     
     def fit_MDS(
             self,
             n_components=2,
+            weighted=True,
+            T=1
         ):
         """
         Fit the MDS algorithm.
         Parameters
         ----------
-        n_components : int, optional
-            The number of components to keep.
-        kernel : str, optional
-            The kernel to use.
-        gamma : float, optional
-            The gamma parameter for the kernel.
         """
-        self.mds = manifold.MDS(
+        self.mds = MDS(
             n_components=n_components, 
             dissimilarity='precomputed',
             verbose=10,
             n_init=1
         )
-        self.X = self.mds.fit_transform(self.apsp_lb)
-        return self.X
+        self.weights, mean_weight = None, None
+        if weighted:
+            # # transform the APSP matrix to a weight matrix
+            # normalized_apsp_energy = T * self.apsp_energy / np.max(self.apsp_energy)
+            # self.weights = (self.apsp_energy.shape[0]**2 ) * np.exp(-normalized_apsp_energy) / np.sum(np.exp(-normalized_apsp_energy))
+            # # mean weight per data point
+            # mean_weight = np.mean(self.weights, axis=1)
+            
+            # knn weights
+            self.weights = np.ones_like(self.apsp_energy) * 0.75
+            apsp_sorted = np.argsort(self.apsp_energy, axis=1)
+            weighted_indices = apsp_sorted[:, :self.exp_params['n_neighbors']*2]
+            self.weights[np.arange(self.apsp_energy.shape[0])[:, None], weighted_indices] = 1       
+
+        self.spectral_init = self._spectral_init(n_components)
+        self.X = self.mds.fit_transform(self.apsp_energy, weight=self.weights, init=self.spectral_init)
+        return self.X, mean_weight
 
 
 class ISORCgrad(object):

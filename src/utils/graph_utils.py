@@ -295,34 +295,11 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     assert len(G.nodes()) == n_points, "The graph has isolated nodes."
     return G, A
 
-def weight_fn(G):
-    """ 
-    Maps ORC values to loss weights.
-    weight_fn: [-2, 1] --> [0, 1]
-    """
-    n = len(G.nodes())
-    W = np.zeros((n, n))
-    for (i, j) in G.edges():
-        orc = G[i][j]['ricciCurvature']
-        weight = 1/3 * (orc + 2)
-        W[i, j] = weight
-    return W
+def energy(orc, d, t, a=1e-3):
+    # return d*(1/(a*(orc+2)**t) + (1-(1/(a*3**t))))
+    return d * np.maximum(-400*(orc-0.9)**3+1, 1)
 
-# def lb_distance(k_ij, d_ij, tau):
-#     """
-#     Computes the distance of an edge using the logarithmic barrier function 
-#     """
-#     # return -1/tau * np.log(k_ij + 2) + (d_ij * tau + np.log(3))/tau
-#     # return 1/(tau*(k_ij + 2)**2) + (d_ij-(1/9*tau))
-#     # return np.maximum(-tau * k_ij + d_ij, d_ij)
-#     # return np.exp(1/(tau * (k_ij + 2))) + (d_ij - np.exp(1/(3*tau)))
-#     # return np.maximum(1/(tau*(k_ij+2))+(d_ij-0.5/(tau)), d_ij)
-#     return d_ij * (1 + (1/(0.01 * (k_ij + 2)**tau)))
-
-def lb_distance(x, d, t, a=0.01):
-    return d*(1/(a*(x+2)**t) + (1-(1/(a*3**t))))
-
-def compute_lb_distances(G, tau, rep_factor):
+def compute_energies(G, tau):
     """
     Computes the distances of all edges in a graph under the logarithmic barrier function
     """
@@ -330,11 +307,9 @@ def compute_lb_distances(G, tau, rep_factor):
     kdists = []
     for u, v in G.edges():
         k_ij = G[u][v]['ricciCurvature']
-        # if G[u][v]['shortcut'] == 1:
-        #     G[u][v]['weight'] = G[u][v]['weight'] * 10
-        d_ij = G[u][v]['weight']
-        # d_ij = 1
-        G[u][v]['lb_distance'] = d_ij * lb_distance(k_ij, d_ij, tau)
-        kdists.append(G[u][v]['lb_distance'])
+        # d_ij = G[u][v]['weight']
+        d_ij = 1
+        G[u][v]['energy'] = d_ij * energy(k_ij, d_ij, tau)
+        kdists.append(G[u][v]['energy'])
         orcs.append(k_ij)
     return G, kdists, orcs
