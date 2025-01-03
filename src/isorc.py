@@ -53,6 +53,7 @@ class ISORC(object):
             self.temperature,
         )
         self.A_energy = nx.to_numpy_array(self.G, weight='energy')
+        assert np.all(self.A_energy >= 0), "invalid entries"
         self.apsp_energy = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
         
         self.A_euc = nx.to_numpy_array(self.G, weight='weight')

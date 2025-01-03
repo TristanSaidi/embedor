@@ -295,9 +295,14 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     assert len(G.nodes()) == n_points, "The graph has isolated nodes."
     return G, A
 
-def energy(orc, d, t, a=1e-3):
+def energy(orc, d, t, a=100):
     # return d*(1/(a*(orc+2)**t) + (1-(1/(a*3**t))))
-    return d * np.maximum(-400*(orc-0.9)**3+1, 1)
+    return d*(np.maximum(1, -a * orc))
+    # return d * np.maximum(1, -(orc)**3)
+    # return d*np.maximum(-a*((orc-1)**3) + 1, -100 * np.log(orc + 2)+50)
+    # return -d * (np.log(np.exp(a*(orc + 2))-1)/(a * (orc + 2)) + 1.5)
+    # return d * -100 * np.log(orc + 2) + 100
+    # return -10 * np.log(orc + 2)
 
 def compute_energies(G, tau):
     """
@@ -307,8 +312,7 @@ def compute_energies(G, tau):
     kdists = []
     for u, v in G.edges():
         k_ij = G[u][v]['ricciCurvature']
-        # d_ij = G[u][v]['weight']
-        d_ij = 1
+        d_ij = G[u][v]['weight']
         G[u][v]['energy'] = d_ij * energy(k_ij, d_ij, tau)
         kdists.append(G[u][v]['energy'])
         orcs.append(k_ij)

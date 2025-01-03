@@ -109,10 +109,11 @@ def quadratics(n_points, noise, supersample=False, supersample_factor=2.5, noise
     data = np.concatenate([X, Y], axis=1)
     # clip noise and resample if necessary
     z = noise*np.random.randn(n_points, 2)
-    resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
-    while len(resample_indices) > 0:
-        z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+    if noise_thresh is not None:
         resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
+        while len(resample_indices) > 0:
+            z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+            resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
     data += z
     return_dict = {
         'data': data,
