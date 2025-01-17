@@ -1,6 +1,9 @@
 from sklearn import datasets
 from src.data.manifold import *
 import numpy as np
+import torchvision
+import torch
+
 # Data generation functions
 
 def concentric_circles(n_points, factor, noise, supersample=False, supersample_factor=2.5, noise_thresh=0.275, dim=2):
@@ -48,10 +51,11 @@ def concentric_circles(n_points, factor, noise, supersample=False, supersample_f
         circles = np.concatenate([circles, np.zeros((circles.shape[0], 1))], axis=1)
     # clip noise and resample if necessary
     z =  noise*np.random.randn(*circles.shape)
-    resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
-    while len(resample_indices) > 0:
-        z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+    if noise_thresh is not None:
         resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
+        while len(resample_indices) > 0:
+            z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+            resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
     circles += z
 
     return_dict = {
@@ -213,10 +217,11 @@ def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5
 
     # clip noise and resample if necessary
     z =  noise*np.random.randn(*swiss_roll.shape)
-    resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
-    while len(resample_indices) > 0:
-        z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+    if noise_thresh is not None:
         resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
+        while len(resample_indices) > 0:
+            z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+            resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
     swiss_roll += z
 
     return_dict = {
@@ -335,10 +340,11 @@ def cassini(n_points, noise, supersample=False, supersample_factor=2.5, noise_th
 
     # clip noise and resample if necessary
     z =  noise*np.random.randn(*cassini.shape)
-    resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
-    while len(resample_indices) > 0:
-        z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+    if noise_thresh is not None:
         resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
+        while len(resample_indices) > 0:
+            z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+            resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
     cassini += z
 
     return_dict = {
@@ -380,10 +386,11 @@ def torus(n_points, noise, r=1.5, R=5, double=False, supersample=False, supersam
     
     # clip noise and resample if necessary
     z =  noise*np.random.randn(*torus.shape)
-    resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
-    while len(resample_indices) > 0:
-        z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+    if noise_thresh is not None:
         resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
+        while len(resample_indices) > 0:
+            z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+            resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
     torus += z
     
     return_dict = {
@@ -647,3 +654,41 @@ def spheres(n_points, noise, supersample=False, supersample_factor=2.5, noise_th
         'subsample_indices': subsample_indices
     }
     return return_dict
+
+
+def get_mnist_data(n_samples, label=None):
+    """
+    Get n_samples MNIST data points with the specified label. If label is None, get n_samples random data points.
+    Parameters:
+
+    n_samples: int
+        Number of data points to get
+    label: int or None
+        Label of the data points to get. If None, get random data points.
+    Returns:
+    ----------
+    mnist_data: np.ndarray
+        n_samples x 784 array of MNIST data points
+    mnist_labels: np.ndarray
+        n_samples array of MNIST labels
+    """
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Lambda(lambda x: x.view(-1))
+    ])
+    mnist = torchvision.datasets.MNIST('/home/tristan/Research/Fa24/isorc/data', train=True, download=True, transform=transform)
+    mnist_data = torch.stack([x for x, _ in mnist]).numpy().astype(np.float64)
+    mnist_labels = torch.tensor([y for _, y in mnist]).numpy().astype(np.float64)
+    if label is not None:
+        label_indices = np.where(mnist_labels == label)[0]
+        np.random.seed(0)
+        np.random.shuffle(label_indices)
+        label_indices = label_indices[:n_samples]
+        mnist_data = mnist_data[label_indices]
+        mnist_labels = mnist_labels[label_indices]
+    else:
+        np.random.seed(0)
+        indices = np.random.choice(mnist_data.shape[0], n_samples, replace=False)
+        mnist_data = mnist_data[indices]
+        mnist_labels = mnist_labels[indices]
+    return mnist_data, mnist_labels
