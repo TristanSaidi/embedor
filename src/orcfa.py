@@ -71,13 +71,13 @@ class ORCFA(object):
         self.edge_mask = np.where(self.A > 0, 1, 0)
 
 
-    def _compute_energies(self, max_energy=1e10):
+    def _compute_energies(self, max_energy=1e1):
         # compute energy for each edge
         energies = []        
         for u, v in self.G.edges():
             orc = self.G[u][v]['ricciCurvature']
             energy = min(
-                (-np.log(orc + 2) + np.log(3)), # energy(+1) = 0, energy(-2) = infty,
+                -np.log(orc + 2) + np.log(3) + 1, # energy(+1) = 0, energy(-2) = infty,
                 max_energy
             )
             self.G[u][v]['energy'] = energy
@@ -95,13 +95,14 @@ class ORCFA(object):
         
         assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
 
-    def _compute_affinities(self):
+    def _compute_affinities(self, min_affinity=-1):
         # compute affinities
         self.edge_energy = self.edge_mask * self.apsp_energy
         def energy_to_affinity(energy):
-            affinity = 2 * (np.exp(-(energy/self.sigma)**2) - 0.5)
+            affinity = 2 * np.exp(-((energy-1)/self.sigma)**2) - 1
             return affinity
         self.edge_affinities = energy_to_affinity(self.edge_energy)
+        self.edge_affinities = np.maximum(self.edge_affinities, min_affinity)
         self.edge_affinities *= self.edge_mask
         # set diagonal to 0
         np.fill_diagonal(self.edge_affinities, 0)
@@ -109,13 +110,14 @@ class ORCFA(object):
 
     def _force_directed_layout(self):
         # spectral initialization
-        spectral_init = nx.spectral_layout(self.G, weight="weight")
+        self.spectral_init = nx.spectral_layout(self.G, weight="weight", dim=self.dim)
         node_mass = {node: 1 for node in self.G.nodes()}
         self.embedding = nx.forceatlas2_layout(
             self.G, 
-            pos=spectral_init, 
+            pos=self.spectral_init, 
             node_mass=node_mass,
             weight='affinity', 
+            dim=self.dim,
         )
     
     def plot_energies(self):
