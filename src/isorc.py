@@ -55,24 +55,36 @@ class ISORC(object):
         self.A_energy = nx.to_numpy_array(self.G, weight='energy')
         assert np.all(self.A_energy >= 0), "invalid entries"
         self.apsp_energy = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
-        
+        # if disconnected, set inf to 1e10
+        self.apsp_energy[np.isinf(self.apsp_energy)] = 1e10
+
         self.A_euc = nx.to_numpy_array(self.G, weight='weight')
         self.apsp_euc = scipy.sparse.csgraph.shortest_path(self.A_euc, unweighted=False, directed=False)
+        # if disconnected, set inf to 1e10
+        self.apsp_euc[np.isinf(self.apsp_euc)] = 1e10
+
+        assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
+        assert np.allclose(self.apsp_euc, self.apsp_euc.T), "APSP matrix must be symmetric."
         # if we want uniformity wrt the metric (as in UMAP)
         if self.uniform:
-            # normalize so kth nearest neighbor is 1
+            # normalize as is done in C-Isomap
+            # 1. compute average kth nearest neighbor distance
             sorted_apsp = np.sort(self.apsp_energy, axis=1)
-            k_nn_dist = sorted_apsp[:, self.k]
-            self.apsp_energy = self.apsp_energy / k_nn_dist[:, None]
-            # symmetrize
-            self.apsp_energy = (self.apsp_energy + self.apsp_energy.T) / 2
-
+            k_nn_dist = sorted_apsp[:, :self.k]
+            avg_k_nn_dist = np.mean(k_nn_dist, axis=1)
+            # 2. for (i,j) in apsp_energy, divide by sqrt(avg_k_nn_dist[i] * avg_k_nn_dist[j])
+            avg_k_nn_dist_i = np.broadcast_to(avg_k_nn_dist, (self.apsp_energy.shape[0], self.apsp_energy.shape[1]))
+            avg_k_nn_dist_j = avg_k_nn_dist_i.copy().T
+            self.apsp_energy = self.apsp_energy / np.sqrt(avg_k_nn_dist_i * avg_k_nn_dist_j)
+            assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
             # repeat for euc
             sorted_apsp = np.sort(self.apsp_euc, axis=1)
-            k_nn_dist = sorted_apsp[:, self.k]
-            self.apsp_euc = self.apsp_euc / k_nn_dist[:, None]
-            # symmetrize
-            self.apsp_euc = (self.apsp_euc + self.apsp_euc.T) / 2
+            k_nn_dist = sorted_apsp[:, :self.k]
+            avg_k_nn_dist = np.mean(k_nn_dist, axis=1)
+            avg_k_nn_dist_i = np.broadcast_to(avg_k_nn_dist, (self.apsp_euc.shape[0], self.apsp_euc.shape[1]))
+            avg_k_nn_dist_j = avg_k_nn_dist_i.copy().T
+            self.apsp_euc = self.apsp_euc / np.sqrt(avg_k_nn_dist_i * avg_k_nn_dist_j)
+            assert np.allclose(self.apsp_euc, self.apsp_euc.T), "APSP matrix must be symmetric."
 
         assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
 
