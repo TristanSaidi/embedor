@@ -294,22 +294,3 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     assert G.is_directed() == False, "The graph is directed."
     assert len(G.nodes()) == n_points, "The graph has isolated nodes."
     return G, A
-
-def energy(orc, a=1, max_energy=1e10):
-    # return d * a *(-np.log(orc + 2) + np.log(3)) # energy(+1) = 0, energy(-2) = infty
-    energy = a *(-np.log(orc + 2) + np.log(3)) + 1 # energy(+1) = 1, energy(-2) = infty
-    return min(energy, max_energy)
-
-def compute_energies(G, tau):
-    """
-    Computes the distances of all edges in a graph under the logarithmic barrier function
-    """
-    orcs = []
-    kdists = []
-    for u, v in G.edges():
-        k_ij = G[u][v]['ricciCurvature']
-        d_ij = G[u][v]['weight']
-        G[u][v]['energy'] = energy(orc=k_ij, a=tau)
-        kdists.append(G[u][v]['energy'])
-        orcs.append(k_ij)
-    return G, kdists, orcs
