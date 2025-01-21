@@ -4,6 +4,7 @@ from src.plotting import *
 from src.utils.graph_utils import *
 from src.utils.embeddings import *
 import numpy as np
+from src.utils.layout import spring_layout, forceatlas2_layout
 
 class ORCFA(object):
     def __init__(
@@ -34,12 +35,15 @@ class ORCFA(object):
         self.uniform = uniform
         self.X = None
 
-    def fit_transform(self, X):
+    def fit_transform(self, X=None):
         self.X = X
+        print("Building nearest neighbor graph...")
         self._build_nnG() # self.G, self.orcs, self.A are now available
+        print("Computing energies and affinities...")
         self._compute_energies()
         self._compute_affinities()
         self._update_G() # add edge attribute 'affinity'
+        print("Running force-directed layout...")
         self._force_directed_layout()
         return self.embedding
 
@@ -51,7 +55,8 @@ class ORCFA(object):
             idx_u = node_indices.index(u)
             idx_v = node_indices.index(v)
             assert self.edge_mask[idx_u, idx_v] == 1, "index error"
-            self.G[u][v]['affinity'] = self.edge_affinities[idx_u, idx_v]
+            self.G[u][v]['signed_affinity'] = self.edge_affinities[idx_u, idx_v]
+            self.G[u][v]['unsigned_affinity'] = self.edge_affinities_unsigned[idx_u, idx_v]
             self.affinities.append(self.edge_affinities[idx_u, idx_v])
             self.energies.append(self.edge_energy[idx_u, idx_v])
 
@@ -71,7 +76,7 @@ class ORCFA(object):
         self.edge_mask = np.where(self.A > 0, 1, 0)
 
 
-    def _compute_energies(self, max_energy=1e1):
+    def _compute_energies(self, max_energy=np.inf):
         # compute energy for each edge
         energies = []        
         for u, v in self.G.edges():
@@ -95,30 +100,62 @@ class ORCFA(object):
         
         assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
 
-    def _compute_affinities(self, min_affinity=-1):
+    def _compute_affinities(self):
         # compute affinities
         self.edge_energy = self.edge_mask * self.apsp_energy
         def energy_to_affinity(energy):
-            affinity = 2 * np.exp(-((energy-1)/self.sigma)**2) - 1
+            affinity = 2 * (np.exp(-((energy-1)/self.sigma)**2) - 0.5)
             return affinity
         self.edge_affinities = energy_to_affinity(self.edge_energy)
-        self.edge_affinities = np.maximum(self.edge_affinities, min_affinity)
+        self.edge_affinities_unsigned = self.edge_affinities + 1 # min affinity = -1
+
         self.edge_affinities *= self.edge_mask
+        self.edge_affinities_unsigned *= self.edge_mask
         # set diagonal to 0
         np.fill_diagonal(self.edge_affinities, 0)
-        assert np.allclose(self.edge_affinities, self.edge_affinities.T), "Affinity matrix must be symmetric."
+        np.fill_diagonal(self.edge_affinities_unsigned, 0)
 
-    def _force_directed_layout(self):
+        assert np.allclose(self.edge_affinities, self.edge_affinities.T), "Affinity matrix must be symmetric."
+        assert np.allclose(self.edge_affinities_unsigned, self.edge_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
+
+    def _force_directed_layout(self, method='forceatlas2', init='random'):
         # spectral initialization
-        self.spectral_init = nx.spectral_layout(self.G, weight="weight", dim=self.dim)
-        node_mass = {node: 1 for node in self.G.nodes()}
-        self.embedding = nx.forceatlas2_layout(
-            self.G, 
-            pos=self.spectral_init, 
-            node_mass=node_mass,
-            weight='affinity', 
-            dim=self.dim,
-        )
+        if init == 'spectral':
+            self.spectral_init = nx.spectral_layout(self.G, weight="unsigned_affinity", dim=self.dim, scale=1)
+        elif init == 'random':
+            self.spectral_init = nx.random_layout(self.G, dim=self.dim)
+        # convert to dict
+        if method == 'forceatlas2':
+            self.embedding = forceatlas2_layout(
+                self.G, 
+                pos=self.spectral_init, 
+                weight='signed_affinity', 
+                dim=self.dim,
+                max_iter=100
+            )
+
+        elif method=='spring':
+            self.embedding = spring_layout(
+                self.G, 
+                scale=1,
+                k=1e-8,
+                pos=self.spectral_init, 
+                weight='signed_affinity', 
+                dim=self.dim,
+                iterations=50
+            )
+
+        elif method == 'kamada_kawai':
+            # apsp energy indices misaligned
+            G_indices = list(self.G.nodes())
+            inverse_indices = [G_indices.index(i) for i in range(len(G_indices))]
+            self.embedding = nx.kamada_kawai_layout(
+                self.G, 
+                pos=self.spectral_init,
+                dist=self.apsp_energy[inverse_indices][:, inverse_indices],
+                weight=None, # weight has no effect when dist is provided 
+                dim=self.dim
+            )
     
     def plot_energies(self):
         plt.figure()
@@ -135,3 +172,10 @@ class ORCFA(object):
         plt.xlabel("Affinity")
         plt.ylabel("Count")
         plt.show()
+
+    def plot_spectral_init(self):
+        spectral_init = np.array([self.spectral_init[node] for node in self.G.nodes()])
+        emb = np.array([self.embedding[node] for node in self.G.nodes()])
+        plt.scatter(spectral_init[:, 0], spectral_init[:, 1], c='r', s=10)
+        plt.scatter(emb[:, 0], emb[:, 1], c='b', s=10)
+        plt.legend(["Spectral Init", "Final Embedding"])
