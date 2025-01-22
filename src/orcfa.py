@@ -13,6 +13,8 @@ class ORCFA(object):
             dim=2,
             verbose=False,
             uniform=False,
+            layout='forceatlas2',
+            layout_dim=None
         ):
 
         """ 
@@ -33,6 +35,8 @@ class ORCFA(object):
             raise NotImplementedError("ORCFA does not support epsilon neighborhoods.")
         self.verbose = verbose
         self.uniform = uniform
+        self.layout = layout
+        self.layout_dim = layout_dim # if 'ambient', run layout in ambient space then project to dim
         self.X = None
 
     def fit_transform(self, X=None):
@@ -44,7 +48,10 @@ class ORCFA(object):
         self._compute_affinities()
         self._update_G() # add edge attribute 'affinity'
         print("Running force-directed layout...")
-        self._force_directed_layout()
+        if self.layout_dim != 'ambient':
+            self._force_directed_layout(method=self.layout)
+        else:
+            self._ambient_layout(method=self.layout)
         return self.embedding
 
     def _update_G(self):
@@ -107,7 +114,7 @@ class ORCFA(object):
             affinity = 2 * (np.exp(-((energy-1)/self.sigma)**2) - 0.5)
             return affinity
         self.edge_affinities = energy_to_affinity(self.edge_energy)
-        self.edge_affinities_unsigned = self.edge_affinities + 1 # min affinity = -1
+        self.edge_affinities_unsigned = 0.5 * (self.edge_affinities + 1) # min affinity = -1
 
         self.edge_affinities *= self.edge_mask
         self.edge_affinities_unsigned *= self.edge_mask
@@ -118,12 +125,9 @@ class ORCFA(object):
         assert np.allclose(self.edge_affinities, self.edge_affinities.T), "Affinity matrix must be symmetric."
         assert np.allclose(self.edge_affinities_unsigned, self.edge_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
 
-    def _force_directed_layout(self, method='forceatlas2', init='random'):
+    def _force_directed_layout(self, method='forceatlas2'):
         # spectral initialization
-        if init == 'spectral':
-            self.spectral_init = nx.spectral_layout(self.G, weight="unsigned_affinity", dim=self.dim, scale=1)
-        elif init == 'random':
-            self.spectral_init = nx.random_layout(self.G, dim=self.dim)
+        self.spectral_init = nx.spectral_layout(self.G, weight="unsigned_affinity", dim=self.dim, scale=1)
         # convert to dict
         if method == 'forceatlas2':
             self.embedding = forceatlas2_layout(
@@ -157,6 +161,21 @@ class ORCFA(object):
                 dim=self.dim
             )
     
+    def _ambient_layout(self, method='forceatlas2'):
+        ambient_dim = self.X.shape[1]
+        init = {i:self.X[i] for i in self.G.nodes()}
+        # convert to dict
+        if method == 'forceatlas2':
+            self.embedding = forceatlas2_layout(
+                self.G, 
+                pos=init, 
+                weight='signed_affinity', 
+                dim=ambient_dim,
+                max_iter=200
+            )
+        else:
+            raise NotImplementedError("Ambient layout method not supported.")
+
     def plot_energies(self):
         plt.figure()
         plt.hist(self.energies, bins=100)
