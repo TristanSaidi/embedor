@@ -2,29 +2,9 @@ import numpy as np
 import networkx as nx
 from networkx.utils import np_random_state
 
-def _process_params(G, center, dim):
-    # Some boilerplate code.
-    import numpy as np
-
-    if not isinstance(G, nx.Graph):
-        empty_graph = nx.Graph()
-        empty_graph.add_nodes_from(G)
-        G = empty_graph
-
-    if center is None:
-        center = np.zeros(dim)
-    else:
-        center = np.asarray(center)
-
-    if len(center) != dim:
-        msg = "length of center coordinates must match dimension of layout"
-        raise ValueError(msg)
-
-    return G, center
-
 
 @np_random_state("seed")
-def forceatlas2_layout(
+def force_directed_layout(
     G,
     pos=None,
     *,
@@ -34,62 +14,7 @@ def forceatlas2_layout(
     seed=None,
     dim=2,
 ):
-    """Position nodes using the ForceAtlas2 force-directed layout algorithm.
-
-    This function applies the ForceAtlas2 layout algorithm [1]_ to a NetworkX graph,
-    positioning the nodes in a way that visually represents the structure of the graph.
-    The algorithm uses physical simulation to minimize the energy of the system,
-    resulting in a more readable layout.
-
-    Parameters
-    ----------
-    G : nx.Graph
-        A NetworkX graph to be laid out.
-    pos : dict or None, optional
-        Initial positions of the nodes. If None, random initial positions are used.
-    max_iter : int (default: 100)
-        Number of iterations for the layout optimization.
-    jitter_tolerance : float (default: 1.0)
-        Controls the tolerance for adjusting the speed of layout generation.
-    scaling_ratio : float (default: 2.0)
-        Determines the scaling of attraction and repulsion forces.
-    distributed_attraction : bool (default: False)
-        Distributes the attraction force evenly among nodes.
-    strong_gravity : bool (default: False)
-        Applies a strong gravitational pull towards the center.
-    node_mass : dict or None, optional
-        Maps nodes to their masses, influencing the attraction to other nodes.
-    node_size : dict or None, optional
-        Maps nodes to their sizes, preventing crowding by creating a halo effect.
-    dissuade_hubs : bool (default: False)
-        Prevents the clustering of hub nodes.
-    linlog : bool (default: False)
-        Uses logarithmic attraction instead of linear.
-    seed : int, RandomState instance or None  optional (default=None)
-        Used only for the initial positions in the algorithm.
-        Set the random state for deterministic node layouts.
-        If int, `seed` is the seed used by the random number generator,
-        if numpy.random.RandomState instance, `seed` is the random
-        number generator,
-        if None, the random number generator is the RandomState instance used
-        by numpy.random.
-    dim : int (default: 2)
-        Sets the dimensions for the layout. Ignored if `pos` is provided.
-
-    Examples
-    --------
-    >>> import networkx as nx
-    >>> G = nx.florentine_families_graph()
-    >>> pos = nx.forceatlas2_layout(G)
-    >>> nx.draw(G, pos=pos)
-
-    References
-    ----------
-    .. [1] Jacomy, M., Venturini, T., Heymann, S., & Bastian, M. (2014).
-           ForceAtlas2, a continuous graph layout algorithm for handy network
-           visualization designed for the Gephi software. PloS one, 9(6), e98679.
-           https://doi.org/10.1371/journal.pone.0098679
-    """
+   
     import numpy as np
 
     if len(G) == 0:
@@ -110,11 +35,14 @@ def forceatlas2_layout(
     A = nx.to_numpy_array(G, weight=weight)
     np.fill_diagonal(A, 0)
 
+    # adjacency matrix for attractive forces
     A_attraction = A.copy()
     A_attraction[A_attraction < 0] = 0
 
+    # adjacency matrix for repulsive forces
     A_repulsion = -1 * A.copy()
     A_repulsion[A_repulsion < 0] = 0
+    np.fill_diagonal(A_repulsion, 0)
 
     def estimate_factor(n, swing, traction, speed, speed_efficiency, jitter_tolerance):
         """Computes the scaling factor for the force in the ForceAtlas2 layout algorithm.
@@ -233,298 +161,361 @@ def forceatlas2_layout(
 
     return dict(zip(G, pos_arr))
 
+###########################################################################################
+###########################################################################################
+#################################### adapted from UMAP ####################################
+###########################################################################################
+###########################################################################################
 
-@np_random_state(10)
-def spring_layout(
-    G,
-    k=None,
-    pos=None,
-    fixed=None,
-    iterations=50,
-    threshold=1e-4,
-    weight="weight",
-    scale=1,
-    center=None,
-    dim=2,
-    seed=None,
-):
-    """Position nodes using Fruchterman-Reingold force-directed algorithm.
+import numba
+from tqdm.auto import tqdm
 
-    The algorithm simulates a force-directed representation of the network
-    treating edges as springs holding nodes close, while treating nodes
-    as repelling objects, sometimes called an anti-gravity force.
-    Simulation continues until the positions are close to an equilibrium.
-
-    There are some hard-coded values: minimal distance between
-    nodes (0.01) and "temperature" of 0.1 to ensure nodes don't fly away.
-    During the simulation, `k` helps determine the distance between nodes,
-    though `scale` and `center` determine the size and place after
-    rescaling occurs at the end of the simulation.
-
-    Fixing some nodes doesn't allow them to move in the simulation.
-    It also turns off the rescaling feature at the simulation's end.
-    In addition, setting `scale` to `None` turns off rescaling.
+@numba.njit()
+def rdist(x, y):
+    """Reduced Euclidean distance.
 
     Parameters
     ----------
-    G : NetworkX graph or list of nodes
-        A position will be assigned to every node in G.
-
-    k : float (default=None)
-        Optimal distance between nodes.  If None the distance is set to
-        1/sqrt(n) where n is the number of nodes.  Increase this value
-        to move nodes farther apart.
-
-    pos : dict or None  optional (default=None)
-        Initial positions for nodes as a dictionary with node as keys
-        and values as a coordinate list or tuple.  If None, then use
-        random initial positions.
-
-    fixed : list or None  optional (default=None)
-        Nodes to keep fixed at initial position.
-        Nodes not in ``G.nodes`` are ignored.
-        ValueError raised if `fixed` specified and `pos` not.
-
-    iterations : int  optional (default=50)
-        Maximum number of iterations taken
-
-    threshold: float optional (default = 1e-4)
-        Threshold for relative error in node position changes.
-        The iteration stops if the error is below this threshold.
-
-    weight : string or None   optional (default='weight')
-        The edge attribute that holds the numerical value used for
-        the edge weight.  Larger means a stronger attractive force.
-        If None, then all edge weights are 1.
-
-    scale : number or None (default: 1)
-        Scale factor for positions. Not used unless `fixed is None`.
-        If scale is None, no rescaling is performed.
-
-    center : array-like or None
-        Coordinate pair around which to center the layout.
-        Not used unless `fixed is None`.
-
-    dim : int
-        Dimension of layout.
-
-    seed : int, RandomState instance or None  optional (default=None)
-        Used only for the initial positions in the algorithm.
-        Set the random state for deterministic node layouts.
-        If int, `seed` is the seed used by the random number generator,
-        if numpy.random.RandomState instance, `seed` is the random
-        number generator,
-        if None, the random number generator is the RandomState instance used
-        by numpy.random.
+    x: array of shape (embedding_dim,)
+    y: array of shape (embedding_dim,)
 
     Returns
     -------
-    pos : dict
-        A dictionary of positions keyed by node
-
-    Examples
-    --------
-    >>> G = nx.path_graph(4)
-    >>> pos = nx.spring_layout(G)
-
-    # The same using longer but equivalent function name
-    >>> pos = nx.fruchterman_reingold_layout(G)
+    The squared euclidean distance between x and y
     """
-    import numpy as np
+    result = 0.0
+    dim = x.shape[0]
+    for i in range(dim):
+        diff = x[i] - y[i]
+        result += diff * diff
 
-    G, center = _process_params(G, center, dim)
+    return result
 
-    if fixed is not None:
-        if pos is None:
-            raise ValueError("nodes are fixed without positions given")
-        for node in fixed:
-            if node not in pos:
-                raise ValueError("nodes are fixed without positions given")
-        nfixed = {node: i for i, node in enumerate(G)}
-        fixed = np.asarray([nfixed[node] for node in fixed if node in nfixed])
+@numba.njit("i4(i8[:])")
+def tau_rand_int(state):
+    """A fast (pseudo)-random number generator.
 
-    if pos is not None:
-        # Determine size of existing domain to adjust initial positions
-        dom_size = max(coord for pos_tup in pos.values() for coord in pos_tup)
-        if dom_size == 0:
-            dom_size = 1
-        pos_arr = seed.rand(len(G), dim) * dom_size + center
+    Parameters
+    ----------
+    state: array of int64, shape (3,)
+        The internal state of the rng
 
-        for i, n in enumerate(G):
-            if n in pos:
-                pos_arr[i] = np.asarray(pos[n])
+    Returns
+    -------
+    A (pseudo)-random int32 value
+    """
+    state[0] = (((state[0] & 4294967294) << 12) & 0xFFFFFFFF) ^ (
+        (((state[0] << 13) & 0xFFFFFFFF) ^ state[0]) >> 19
+    )
+    state[1] = (((state[1] & 4294967288) << 4) & 0xFFFFFFFF) ^ (
+        (((state[1] << 2) & 0xFFFFFFFF) ^ state[1]) >> 25
+    )
+    state[2] = (((state[2] & 4294967280) << 17) & 0xFFFFFFFF) ^ (
+        (((state[2] << 3) & 0xFFFFFFFF) ^ state[2]) >> 11
+    )
+
+    return state[0] ^ state[1] ^ state[2]
+
+
+@numba.njit()
+def clip(val):
+    """Standard clamping of a value into a fixed range (in this case -4.0 to
+    4.0)
+
+    Parameters
+    ----------
+    val: float
+        The value to be clamped.
+
+    Returns
+    -------
+    The clamped value, now fixed to be in the range -4.0 to 4.0.
+    """
+    if val > 4.0:
+        return 4.0
+    elif val < -4.0:
+        return -4.0
     else:
-        pos_arr = None
-        dom_size = 1
+        return val
 
-    if len(G) == 0:
-        return {}
-    if len(G) == 1:
-        return {nx.utils.arbitrary_element(G.nodes()): center}
-
-    try:
-        raise ValueError
-        # # Sparse matrix
-        # if len(G) < 500:  # sparse solver for large graphs
-        #     raise ValueError
-        # A = nx.to_scipy_sparse_array(G, weight=weight, dtype="f")
-        # if k is None and fixed is not None:
-        #     # We must adjust k by domain size for layouts not near 1x1
-        #     nnodes, _ = A.shape
-        #     k = dom_size / np.sqrt(nnodes)
-        # pos = _sparse_fruchterman_reingold(
-        #     A, k, pos_arr, fixed, iterations, threshold, dim, seed
-        # )
-    except ValueError:
-        A = nx.to_numpy_array(G, weight=weight)
-        if k is None and fixed is not None:
-            # We must adjust k by domain size for layouts not near 1x1
-            nnodes, _ = A.shape
-            k = dom_size / np.sqrt(nnodes)
-        pos = _fruchterman_reingold(
-            A, k, pos_arr, fixed, iterations, threshold, dim, seed
-        )
-    if fixed is None and scale is not None:
-        pos = nx.rescale_layout(pos, scale=scale) + center
-    pos = dict(zip(G, pos))
-    return pos
-
-
-@np_random_state(7)
-def _fruchterman_reingold(
-    A, k=None, pos=None, fixed=None, iterations=50, threshold=1e-4, dim=2, seed=None
+def _optimize_layout_euclidean_single_epoch(
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    rng_state_per_sample,
+    gamma,
+    dim,
+    alpha,
+    epochs_per_negative_sample,
+    epoch_of_next_negative_sample,
+    epoch_of_next_sample,
+    n,
 ):
-    # Position nodes in adjacency matrix A using Fruchterman-Reingold
-    # Entry point for NetworkX graph is fruchterman_reingold_layout()
-    import numpy as np
+    # iterate through each edge in our graph
+    for i in numba.prange(epochs_per_sample.shape[0]):
+        # current implementation: epoch_of_next_sample == epochs_per_sample (at the beginning)
+        # this gets triggered if the number of epochs exceeds the next time sample [i] should be updated
+        if epoch_of_next_sample[i] <= n:
+            j = head[i]
+            k = tail[i]
 
-    try:
-        nnodes, _ = A.shape
-    except AttributeError as err:
-        msg = "fruchterman_reingold() takes an adjacency matrix as input"
-        raise nx.NetworkXError(msg) from err
+            current = head_embedding[j]
+            other = tail_embedding[k]
 
-    if pos is None:
-        # random initial positions
-        pos = np.asarray(seed.rand(nnodes, dim), dtype=A.dtype)
-    else:
-        # make sure positions are of same type as matrix
-        pos = pos.astype(A.dtype)
-
-    # optimal distance between nodes
-    if k is None:
-        k = np.sqrt(1.0 / nnodes)
-    # the initial "temperature"  is about .1 of domain area (=1x1)
-    # this is the largest step allowed in the dynamics.
-    # We need to calculate this in case our fixed positions force our domain
-    # to be much bigger than 1x1
-    t = max(max(pos.T[0]) - min(pos.T[0]), max(pos.T[1]) - min(pos.T[1])) * 0.1
-    # simple cooling scheme.
-    # linearly step down by dt on each iteration so last iteration is size dt.
-    dt = t / (iterations + 1)
-    delta = np.zeros((pos.shape[0], pos.shape[0], pos.shape[1]), dtype=A.dtype)
-    # the inscrutable (but fast) version
-    # this is still O(V^2)
-    # could use multilevel methods to speed this up significantly
-    for iteration in range(iterations):
-        # matrix of difference between points
-        delta = pos[:, np.newaxis, :] - pos[np.newaxis, :, :]
-        # distance between points
-        distance = np.linalg.norm(delta, axis=-1)
-        # enforce minimum distance of 0.01
-        np.clip(distance, 0.01, None, out=distance)
-        # displacement "force"
-        displacement = np.einsum(
-            "ijk,ij->ik", delta, (k * k / distance**2 - A * distance / k)
-        )
-        # update positions
-        length = np.linalg.norm(displacement, axis=-1)
-        length = np.where(length < 0.01, 0.1, length)
-        delta_pos = np.einsum("ij,i->ij", displacement, t / length)
-        if fixed is not None:
-            # don't change positions of fixed nodes
-            delta_pos[fixed] = 0.0
-        pos += delta_pos
-        # cool temperature
-        t -= dt
-        energy = np.linalg.norm(delta_pos) / nnodes
-        print(f"Iteration: {iteration}, Energy: {energy}")
-        if energy < threshold:
-            break
-    return pos
+            dist_squared = rdist(current, other)
 
 
-@np_random_state(7)
-def _sparse_fruchterman_reingold(
-    A, k=None, pos=None, fixed=None, iterations=50, threshold=1e-4, dim=2, seed=None
+            if dist_squared > 0.0:
+                grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
+                grad_coeff /= a * pow(dist_squared, b) + 1.0
+            else:
+                grad_coeff = 0.0
+
+            for d in range(dim):
+                grad_d = clip(grad_coeff * (current[d] - other[d]))
+                current[d] += grad_d * alpha
+                other[d] += -grad_d * alpha
+
+            epoch_of_next_sample[i] += epochs_per_sample[i] # update sample i in [epochs_per_sample] epochs
+
+            n_neg_samples = int(
+                (n - epoch_of_next_negative_sample[i]) / epochs_per_negative_sample[i]
+            )
+
+            for p in range(n_neg_samples):
+                k = tau_rand_int(rng_state_per_sample[j]) % n_vertices
+
+                other = tail_embedding[k]
+
+                dist_squared = rdist(current, other)
+
+                if dist_squared > 0.0:
+                    grad_coeff = 2.0 * gamma * b
+                    grad_coeff /= (0.001 + dist_squared) * (
+                        a * pow(dist_squared, b) + 1
+                    )
+                elif j == k:
+                    continue
+                else:
+                    grad_coeff = 0.0
+
+                for d in range(dim):
+                    if grad_coeff > 0.0:
+                        grad_d = clip(grad_coeff * (current[d] - other[d]))
+                    else:
+                        grad_d = 0
+                    current[d] += grad_d * alpha
+
+            epoch_of_next_negative_sample[i] += (
+                n_neg_samples * epochs_per_negative_sample[i]
+            )
+
+_nb_optimize_layout_euclidean_single_epoch = numba.njit(
+    _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=False
+)
+
+############### UMAP version ###############
+
+# Note: this implementation might be erroneous, as the result has no dependence
+# on the choice of n_epochs. 
+
+# def make_epochs_per_sample(weights, n_epochs):
+#     """Given a set of weights and number of epochs generate the number of
+#     epochs per sample for each weight.
+
+#     Parameters
+#     ----------
+#     weights: array of shape (n_1_simplices)
+#         The weights of how much we wish to sample each 1-simplex.
+
+#     n_epochs: int
+#         The total number of epochs we want to train for.
+
+#     Returns
+#     -------
+#     An array of number of epochs per sample, one for each 1-simplex.
+#     """
+#     result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
+#     n_samples = n_epochs * (weights / weights.max())
+#     result[n_samples > 0] = float(n_epochs) / np.float64(n_samples[n_samples > 0])
+#     return result
+
+############### UMAP version ###############
+
+
+
+# converts weights to the number of epochs to SKIP for each sample
+# larger weight --> skip fewer epochs
+def make_epochs_per_sample(weights, n_epochs):
+    """Given a set of weights and number of epochs generate the number of
+    epochs per sample for each weight.
+
+    Parameters
+    ----------
+    weights: array of shape (n_1_simplices)
+        The weights of how much we wish to sample each 1-simplex.
+
+    n_epochs: int
+        The total number of epochs we want to train for.
+
+    Returns
+    -------
+    An array of number of epochs per sample, one for each 1-simplex.
+    """
+    result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
+    norm_weights = weights / weights.sum()
+
+    max_w, min_w = norm_weights.max(), norm_weights.min()
+    n_samples = (n_epochs - 1)*(norm_weights - min_w)/(max_w - min_w) + 1
+
+    result[n_samples > 0] = n_epochs/np.float64(n_samples[n_samples > 0])
+    return result
+
+
+def optimize_layout_euclidean(
+    head_embedding,
+    tail_embedding,
+    head,
+    tail,
+    n_epochs,
+    n_vertices,
+    epochs_per_sample,
+    a,
+    b,
+    rng_state,
+    gamma=1.0,
+    initial_alpha=1.0,
+    negative_sample_rate=5.0,
+    verbose=False,
+    tqdm_kwds=None,
 ):
-    # Position nodes in adjacency matrix A using Fruchterman-Reingold
-    # Entry point for NetworkX graph is fruchterman_reingold_layout()
-    # Sparse version
-    import numpy as np
-    import scipy as sp
+    """Improve an embedding using stochastic gradient descent to minimize the
+    fuzzy set cross entropy between the 1-skeletons of the high dimensional
+    and low dimensional fuzzy simplicial sets. In practice this is done by
+    sampling edges based on their membership strength (with the (1-p) terms
+    coming from negative sampling similar to word2vec).
+    Parameters
+    ----------
+    head_embedding: array of shape (n_samples, n_components)
+        The initial embedding to be improved by SGD.
+    tail_embedding: array of shape (source_samples, n_components)
+        The reference embedding of embedded points. If not embedding new
+        previously unseen points with respect to an existing embedding this
+        is simply the head_embedding (again); otherwise it provides the
+        existing embedding to embed with respect to.
+    head: array of shape (n_1_simplices)
+        The indices of the heads of 1-simplices with non-zero membership.
+    tail: array of shape (n_1_simplices)
+        The indices of the tails of 1-simplices with non-zero membership.
+    n_epochs: int, or list of int
+        The number of training epochs to use in optimization, or a list of
+        epochs at which to save the embedding. In case of a list, the optimization
+        will use the maximum number of epochs in the list, and will return a list
+        of embedding in the order of increasing epoch, regardless of the order in
+        the epoch list.
+    n_vertices: int
+        The number of vertices (0-simplices) in the dataset.
+    epochs_per_sample: array of shape (n_1_simplices)
+        A float value of the number of epochs per 1-simplex. 1-simplices with
+        weaker membership strength will have more epochs between being sampled.
+    a: float
+        Parameter of differentiable approximation of right adjoint functor
+    b: float
+        Parameter of differentiable approximation of right adjoint functor
+    rng_state: array of int64, shape (3,)
+        The internal state of the rng
+    gamma: float (optional, default 1.0)
+        Weight to apply to negative samples.
+    initial_alpha: float (optional, default 1.0)
+        Initial learning rate for the SGD.
+    negative_sample_rate: int (optional, default 5)
+        Number of negative samples to use per positive sample.
+    parallel: bool (optional, default False)
+        Whether to run the computation using numba parallel.
+        Running in parallel is non-deterministic, and is not used
+        if a random seed has been set, to ensure reproducibility.
+    verbose: bool (optional, default False)
+        Whether to report information on the current progress of the algorithm.
+    densmap: bool (optional, default False)
+        Whether to use the density-augmented densMAP objective
+    densmap_kwds: dict (optional, default None)
+        Auxiliary data for densMAP
+    tqdm_kwds: dict (optional, default None)
+        Keyword arguments for tqdm progress bar.
+    Returns
+    -------
+    embedding: array of shape (n_samples, n_components)
+        The optimized embedding.
+    """
 
-    try:
-        nnodes, _ = A.shape
-    except AttributeError as err:
-        msg = "fruchterman_reingold() takes an adjacency matrix as input"
-        raise nx.NetworkXError(msg) from err
-    # make sure we have a LIst of Lists representation
-    try:
-        A = A.tolil()
-    except AttributeError:
-        A = (sp.sparse.coo_array(A)).tolil()
+    dim = head_embedding.shape[1]
+    alpha = initial_alpha
 
-    if pos is None:
-        # random initial positions
-        pos = np.asarray(seed.rand(nnodes, dim), dtype=A.dtype)
+    if negative_sample_rate != 0:
+        epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
     else:
-        # make sure positions are of same type as matrix
-        pos = pos.astype(A.dtype)
+        epochs_per_negative_sample = np.zeros(epochs_per_sample.shape)
 
-    # no fixed nodes
-    if fixed is None:
-        fixed = []
+    epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
+    epoch_of_next_sample = epochs_per_sample.copy()
 
-    # optimal distance between nodes
-    if k is None:
-        k = np.sqrt(1.0 / nnodes)
-    # the initial "temperature"  is about .1 of domain area (=1x1)
-    # this is the largest step allowed in the dynamics.
-    t = max(max(pos.T[0]) - min(pos.T[0]), max(pos.T[1]) - min(pos.T[1])) * 0.1
-    # simple cooling scheme.
-    # linearly step down by dt on each iteration so last iteration is size dt.
-    dt = t / (iterations + 1)
+    # Fix for calling UMAP many times for small datasets, otherwise we spend here
+    # a lot of time in compilation step (first call to numba function)
+    optimize_fn = _nb_optimize_layout_euclidean_single_epoch
 
-    displacement = np.zeros((dim, nnodes))
-    for iteration in range(iterations):
-        displacement *= 0
-        # loop over rows
-        for i in range(A.shape[0]):
-            if i in fixed:
-                continue
-            # difference between this row's node position and all others
-            delta = (pos[i] - pos).T
-            # distance between points
-            distance = np.sqrt((delta**2).sum(axis=0))
-            # enforce minimum distance of 0.01
-            distance = np.where(distance < 0.01, 0.01, distance)
-            # the adjacency matrix row
-            Ai = A.getrowview(i).toarray()  # TODO: revisit w/ sparse 1D container
-            # displacement "force"
-            displacement[:, i] += (
-                delta * (k * k / distance**2 - Ai * distance / k)
-            ).sum(axis=1)
-        # update positions
-        length = np.sqrt((displacement**2).sum(axis=0))
-        length = np.where(length < 0.01, 0.1, length)
-        delta_pos = (displacement * t / length).T
-        pos += delta_pos
-        # cool temperature
-        t -= dt
-        energy = np.linalg.norm(delta_pos) / nnodes
-        print(f"Iteration: {iteration}, Energy: {energy}")
-        if energy < threshold:
-            break
-    return pos
+    if tqdm_kwds is None:
+        tqdm_kwds = {}
+
+    epochs_list = None
+    embedding_list = []
+    if isinstance(n_epochs, list):
+        epochs_list = n_epochs
+        n_epochs = max(epochs_list)
+
+    if "disable" not in tqdm_kwds:
+        tqdm_kwds["disable"] = not verbose
+
+    rng_state_per_sample = np.full(
+        (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
+    ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
+
+    for n in tqdm(range(n_epochs), **tqdm_kwds):
+        # n := epoch
+        optimize_fn(
+            head_embedding,
+            tail_embedding,
+            head,
+            tail,
+            n_vertices,
+            epochs_per_sample,
+            a,
+            b,
+            rng_state_per_sample,
+            gamma,
+            dim,
+            alpha,
+            epochs_per_negative_sample,
+            epoch_of_next_negative_sample,
+            epoch_of_next_sample,
+            n,
+        )
+
+        alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
+
+        if verbose and n % int(n_epochs / 10) == 0:
+            print("\tcompleted ", n, " / ", n_epochs, "epochs")
+
+        if epochs_list is not None and n in epochs_list:
+            embedding_list.append(head_embedding.copy())
+
+    # Add the last embedding to the list as well
+    if epochs_list is not None:
+        embedding_list.append(head_embedding.copy())
+
+    return head_embedding if epochs_list is None else embedding_list
 

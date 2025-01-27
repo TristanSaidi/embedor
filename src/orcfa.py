@@ -4,7 +4,7 @@ from src.plotting import *
 from src.utils.graph_utils import *
 from src.utils.embeddings import *
 import numpy as np
-from src.utils.layout import spring_layout, forceatlas2_layout
+from src.utils.layout import *
 
 class ORCFA(object):
     def __init__(
@@ -13,8 +13,7 @@ class ORCFA(object):
             dim=2,
             verbose=False,
             uniform=False,
-            layout='forceatlas2',
-            layout_dim=None
+            seed=10
         ):
 
         """ 
@@ -26,7 +25,6 @@ class ORCFA(object):
         dim : int, optional
             The dimensionality of the embedding (if any).
         """
-        # dim must be int if init != 'ambient'
         self.dim = dim
         self.exp_params = exp_params
         self.k = self.exp_params['n_neighbors']
@@ -34,9 +32,8 @@ class ORCFA(object):
         if self.exp_params['mode'] == 'eps':
             raise NotImplementedError("ORCFA does not support epsilon neighborhoods.")
         self.verbose = verbose
+        self.seed = seed
         self.uniform = uniform
-        self.layout = layout
-        self.layout_dim = layout_dim # if 'ambient', run layout in ambient space then project to dim
         self.X = None
 
     def fit_transform(self, X=None):
@@ -48,15 +45,13 @@ class ORCFA(object):
         self._compute_affinities()
         self._update_G() # add edge attribute 'affinity'
         print("Running force-directed layout...")
-        if self.layout_dim != 'ambient':
-            self._force_directed_layout(method=self.layout)
-        else:
-            self._ambient_layout(method=self.layout)
+        self._force_directed_layout()
         return self.embedding
 
     def _update_G(self):
         self.affinities = []
         self.energies = []
+        self.affinities_unsigned = []
         node_indices = list(self.G.nodes())
         for i, (u,v) in enumerate(self.G.edges):
             idx_u = node_indices.index(u)
@@ -65,6 +60,7 @@ class ORCFA(object):
             self.G[u][v]['signed_affinity'] = self.edge_affinities[idx_u, idx_v]
             self.G[u][v]['unsigned_affinity'] = self.edge_affinities_unsigned[idx_u, idx_v]
             self.affinities.append(self.edge_affinities[idx_u, idx_v])
+            self.affinities_unsigned.append(self.edge_affinities_unsigned[idx_u, idx_v])
             self.energies.append(self.edge_energy[idx_u, idx_v])
 
     def _build_nnG(self):
@@ -125,56 +121,48 @@ class ORCFA(object):
         assert np.allclose(self.edge_affinities, self.edge_affinities.T), "Affinity matrix must be symmetric."
         assert np.allclose(self.edge_affinities_unsigned, self.edge_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
 
-    def _force_directed_layout(self, method='forceatlas2'):
+    def _force_directed_layout(self):
         # spectral initialization
         self.spectral_init = nx.spectral_layout(self.G, weight="unsigned_affinity", dim=self.dim, scale=1)
+        self.embedding = np.array([self.spectral_init[node] for node in range(len(self.G.nodes()))])
         # convert to dict
-        if method == 'forceatlas2':
-            self.embedding = forceatlas2_layout(
-                self.G, 
-                pos=self.spectral_init, 
-                weight='signed_affinity', 
-                dim=self.dim,
-                max_iter=100
-            )
+        indices = list(self.G.nodes())
+        inv_indices = [indices.index(i) for i in range(len(indices))]
 
-        elif method=='spring':
-            self.embedding = spring_layout(
-                self.G, 
-                scale=1,
-                k=1e-8,
-                pos=self.spectral_init, 
-                weight='signed_affinity', 
-                dim=self.dim,
-                iterations=50
-            )
+        self.sparse_G = nx.to_scipy_sparse_array(self.G, weight="unsigned_affinity")
+        # reorder the rows and columns
+        self.sparse_G = self.sparse_G[inv_indices, :][:, inv_indices].tocoo()
 
-        elif method == 'kamada_kawai':
-            # apsp energy indices misaligned
-            G_indices = list(self.G.nodes())
-            inverse_indices = [G_indices.index(i) for i in range(len(G_indices))]
-            self.embedding = nx.kamada_kawai_layout(
-                self.G, 
-                pos=self.spectral_init,
-                dist=self.apsp_energy[inverse_indices][:, inverse_indices],
-                weight=None, # weight has no effect when dist is provided 
-                dim=self.dim
-            )
-    
-    def _ambient_layout(self, method='forceatlas2'):
-        ambient_dim = self.X.shape[1]
-        init = {i:self.X[i] for i in self.G.nodes()}
-        # convert to dict
-        if method == 'forceatlas2':
-            self.embedding = forceatlas2_layout(
-                self.G, 
-                pos=init, 
-                weight='signed_affinity', 
-                dim=ambient_dim,
-                max_iter=200
-            )
-        else:
-            raise NotImplementedError("Ambient layout method not supported.")
+        # convert to array
+        from sklearn.utils import check_random_state
+        # We add a little noise to avoid local minima for optimization to come
+        self.embedding = noisy_scale_coords(
+            self.embedding, check_random_state(self.seed), max_coord=10, noise=0.0001
+        )
+
+        # how many epochs to SKIP for each sample
+        self.epochs_per_sample = make_epochs_per_sample(np.array(self.affinities_unsigned), n_epochs=500)
+
+        self.embedding = (
+            10.0
+            * (self.embedding - np.min(self.embedding, 0))
+            / (np.max(self.embedding, 0) - np.min(self.embedding, 0))
+        ).astype(np.float32, order="C")
+        # convert graph to scipy sparse matrix
+        self.embedding = optimize_layout_euclidean(
+            self.embedding, 
+            self.embedding,
+            self.sparse_G.row,
+            self.sparse_G.col,
+            n_epochs=500,
+            n_vertices=len(self.G.nodes()),
+            epochs_per_sample=self.epochs_per_sample,
+            a=1.5,
+            b=1,
+            rng_state=[self.seed]*3,
+            initial_alpha=0.25,
+            negative_sample_rate=1
+        )
 
     def plot_energies(self):
         plt.figure()
@@ -198,3 +186,11 @@ class ORCFA(object):
         plt.scatter(spectral_init[:, 0], spectral_init[:, 1], c='r', s=10)
         plt.scatter(emb[:, 0], emb[:, 1], c='b', s=10)
         plt.legend(["Spectral Init", "Final Embedding"])
+
+
+def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
+    expansion = max_coord / np.abs(coords).max()
+    coords = (coords * expansion).astype(np.float32)
+    return coords + random_state.normal(scale=noise, size=coords.shape).astype(
+        np.float32
+    )
