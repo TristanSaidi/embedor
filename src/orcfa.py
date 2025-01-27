@@ -54,9 +54,8 @@ class ORCFA(object):
         self.affinities_unsigned = []
         node_indices = list(self.G.nodes())
         for i, (u,v) in enumerate(self.G.edges):
-            idx_u = node_indices.index(u)
-            idx_v = node_indices.index(v)
-            assert self.edge_mask[idx_u, idx_v] == 1, "index error"
+            idx_u = u
+            idx_v = v
             self.G[u][v]['signed_affinity'] = self.edge_affinities[idx_u, idx_v]
             self.G[u][v]['unsigned_affinity'] = self.edge_affinities_unsigned[idx_u, idx_v]
             self.affinities.append(self.edge_affinities[idx_u, idx_v])
@@ -75,7 +74,7 @@ class ORCFA(object):
         return_dict = compute_orc(G, nbrhood_size=1) # compute ORC using 1-hop neighborhood
         self.G = return_dict['G']
         self.orcs = return_dict['orcs']
-        self.A = nx.to_numpy_array(self.G, weight='weight')
+        self.A = nx.to_numpy_array(self.G, weight='weight', nodelist=list(range(len(self.G.nodes()))))
         self.edge_mask = np.where(self.A > 0, 1, 0)
 
 
@@ -91,7 +90,7 @@ class ORCFA(object):
             self.G[u][v]['energy'] = energy
             energies.append(energy)
         
-        self.A_energy = nx.to_numpy_array(self.G, weight='energy')
+        self.A_energy = nx.to_numpy_array(self.G, weight='energy', nodelist=list(range(len(self.G.nodes()))))
 
         assert np.all(np.where(self.A_energy > 0, 1, 0) == self.edge_mask), "invalid entries"
         assert np.all(self.A_energy >= 0), "invalid entries"
@@ -105,34 +104,43 @@ class ORCFA(object):
 
     def _compute_affinities(self):
         # compute affinities
-        self.edge_energy = self.edge_mask * self.apsp_energy
         def energy_to_affinity(energy):
             affinity = 2 * (np.exp(-((energy-1)/self.sigma)**2) - 0.5)
             return affinity
+        
+        # compute affinities [without masking]
+        self.all_energies = self.apsp_energy.copy()
+        self.all_affinities = energy_to_affinity(self.all_energies)
+        self.all_affinities_unsigned = 0.5 * (self.all_affinities + 1) 
+        self.all_repulsions_unsigned = 1 - self.all_affinities_unsigned
+
+        # compute affinities [with masking]
+        self.edge_energy = self.edge_mask * self.apsp_energy
         self.edge_affinities = energy_to_affinity(self.edge_energy)
-        self.edge_affinities_unsigned = 0.5 * (self.edge_affinities + 1) # min affinity = -1
+        self.edge_affinities_unsigned = 0.5 * (self.edge_affinities + 1) 
+        self.edge_repulsions_unsigned = 1 - self.edge_affinities_unsigned
+        
 
         self.edge_affinities *= self.edge_mask
         self.edge_affinities_unsigned *= self.edge_mask
         # set diagonal to 0
         np.fill_diagonal(self.edge_affinities, 0)
         np.fill_diagonal(self.edge_affinities_unsigned, 0)
+        np.fill_diagonal(self.edge_repulsions_unsigned, 0)
+        np.fill_diagonal(self.all_affinities, 0)
+        np.fill_diagonal(self.all_affinities_unsigned, 0)
+        np.fill_diagonal(self.all_repulsions_unsigned, 0)
 
         assert np.allclose(self.edge_affinities, self.edge_affinities.T), "Affinity matrix must be symmetric."
         assert np.allclose(self.edge_affinities_unsigned, self.edge_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
+        assert np.allclose(self.all_affinities, self.all_affinities.T), "Affinity matrix must be symmetric."
+        assert np.allclose(self.all_affinities_unsigned, self.all_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
 
     def _force_directed_layout(self):
         # spectral initialization
         self.spectral_init = nx.spectral_layout(self.G, weight="unsigned_affinity", dim=self.dim, scale=1)
         self.embedding = np.array([self.spectral_init[node] for node in range(len(self.G.nodes()))])
-        # convert to dict
-        indices = list(self.G.nodes())
-        inv_indices = [indices.index(i) for i in range(len(indices))]
-
-        self.sparse_G = nx.to_scipy_sparse_array(self.G, weight="unsigned_affinity")
-        # reorder the rows and columns
-        self.sparse_G = self.sparse_G[inv_indices, :][:, inv_indices].tocoo()
-
+        
         # convert to array
         from sklearn.utils import check_random_state
         # We add a little noise to avoid local minima for optimization to come
@@ -143,25 +151,27 @@ class ORCFA(object):
         # how many epochs to SKIP for each sample
         self.epochs_per_sample = make_epochs_per_sample(np.array(self.affinities_unsigned), n_epochs=500)
 
+        from src.utils.layout import make_epochs_per_pair
+        self.epochs_per_pair_positive = make_epochs_per_pair(self.all_affinities_unsigned, n_epochs=500)
+        self.epochs_per_pair_negative = make_epochs_per_pair(self.all_repulsions_unsigned, n_epochs=500)
+
         self.embedding = (
             10.0
             * (self.embedding - np.min(self.embedding, 0))
             / (np.max(self.embedding, 0) - np.min(self.embedding, 0))
         ).astype(np.float32, order="C")
+
+        # self.gamma = (self.X.shape[0] ** 2 - np.sum(self.all_affinities_unsigned)) / np.sum(self.all_affinities_unsigned)
+        # print("Gamma: ", self.gamma)
+        self.gamma = 1e-3
         # convert graph to scipy sparse matrix
         self.embedding = optimize_layout_euclidean(
             self.embedding, 
-            self.embedding,
-            self.sparse_G.row,
-            self.sparse_G.col,
-            n_epochs=500,
-            n_vertices=len(self.G.nodes()),
-            epochs_per_sample=self.epochs_per_sample,
-            a=1.5,
-            b=1,
-            rng_state=[self.seed]*3,
+            n_epochs=50,
+            epochs_per_positive_sample=self.epochs_per_pair_positive,
+            epochs_per_negative_sample=self.epochs_per_pair_negative,
+            gamma=self.gamma,
             initial_alpha=0.25,
-            negative_sample_rate=1
         )
 
     def plot_energies(self):

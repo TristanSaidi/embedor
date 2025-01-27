@@ -239,67 +239,55 @@ def clip(val):
         return val
 
 def _optimize_layout_euclidean_single_epoch(
-    head_embedding,
-    tail_embedding,
-    head,
-    tail,
-    n_vertices,
-    epochs_per_sample,
-    a,
-    b,
-    rng_state_per_sample,
+    embedding,
+    epochs_per_positive_sample,
+    epochs_per_negative_sample,
     gamma,
     dim,
     alpha,
-    epochs_per_negative_sample,
+    epoch_of_next_positive_sample,
     epoch_of_next_negative_sample,
-    epoch_of_next_sample,
     n,
 ):
-    # iterate through each edge in our graph
-    for i in numba.prange(epochs_per_sample.shape[0]):
-        # current implementation: epoch_of_next_sample == epochs_per_sample (at the beginning)
-        # this gets triggered if the number of epochs exceeds the next time sample [i] should be updated
-        if epoch_of_next_sample[i] <= n:
-            j = head[i]
-            k = tail[i]
+    # iterate through each pairwise interaction in our graph
+    for i in numba.prange(epochs_per_positive_sample.shape[0]):
+        for j in numba.prange(epochs_per_positive_sample.shape[1]):
+            # current implementation: epoch_of_next_sample == epochs_per_sample (at the beginning)
+            # this gets triggered if the number of epochs exceeds the next time sample [i] should be updated
+            if epoch_of_next_positive_sample[i][j] <= n:
 
-            current = head_embedding[j]
-            other = tail_embedding[k]
+                current = embedding[i]
+                other = embedding[j]
 
-            dist_squared = rdist(current, other)
+                dist_squared = rdist(current, other)
 
 
-            if dist_squared > 0.0:
-                grad_coeff = -2.0 * a * b * pow(dist_squared, b - 1.0)
-                grad_coeff /= a * pow(dist_squared, b) + 1.0
-            else:
-                grad_coeff = 0.0
+                if dist_squared > 0.0:
+                    grad_coeff = -2.0 * 1.0 * 1.0 * pow(dist_squared, 1.0 - 1.0)
+                    grad_coeff /= 1.0 * pow(dist_squared, 1.0) + 1.0
+                else:
+                    grad_coeff = 0.0
 
-            for d in range(dim):
-                grad_d = clip(grad_coeff * (current[d] - other[d]))
-                current[d] += grad_d * alpha
-                other[d] += -grad_d * alpha
+                for d in range(dim):
+                    grad_d = clip(grad_coeff * (current[d] - other[d]))
+                    current[d] += grad_d * alpha
+                    other[d] += -grad_d * alpha
 
-            epoch_of_next_sample[i] += epochs_per_sample[i] # update sample i in [epochs_per_sample] epochs
+                epoch_of_next_positive_sample[i][j] += epochs_per_positive_sample[i][j] # update sample i in [epochs_per_sample] epochs
 
-            n_neg_samples = int(
-                (n - epoch_of_next_negative_sample[i]) / epochs_per_negative_sample[i]
-            )
+            if epoch_of_next_negative_sample[i][j] <= n:
 
-            for p in range(n_neg_samples):
-                k = tau_rand_int(rng_state_per_sample[j]) % n_vertices
-
-                other = tail_embedding[k]
+                current = embedding[i]
+                other = embedding[j]
 
                 dist_squared = rdist(current, other)
 
                 if dist_squared > 0.0:
-                    grad_coeff = 2.0 * gamma * b
+                    grad_coeff = 2.0 * gamma * 1.0
                     grad_coeff /= (0.001 + dist_squared) * (
-                        a * pow(dist_squared, b) + 1
+                        1.0 * pow(dist_squared, 1.0) + 1
                     )
-                elif j == k:
+                elif i == j:
                     continue
                 else:
                     grad_coeff = 0.0
@@ -310,10 +298,9 @@ def _optimize_layout_euclidean_single_epoch(
                     else:
                         grad_d = 0
                     current[d] += grad_d * alpha
+                
+                epoch_of_next_negative_sample[i][j] += epochs_per_negative_sample[i][j] # update sample i in [epochs_per_sample] epochs
 
-            epoch_of_next_negative_sample[i] += (
-                n_neg_samples * epochs_per_negative_sample[i]
-            )
 
 _nb_optimize_layout_euclidean_single_epoch = numba.njit(
     _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=False
@@ -377,21 +364,44 @@ def make_epochs_per_sample(weights, n_epochs):
     return result
 
 
+
+
+# converts weights to the number of epochs to SKIP for each sample
+# larger weight --> skip fewer epochs
+def make_epochs_per_pair(weights, n_epochs):
+    """Given a set of weights and number of epochs generate the number of
+    epochs per sample for each weight.
+
+    Parameters
+    ----------
+    weights: array of shape (n, n)
+        The weights of how much we wish to sample each 1-simplex.
+
+    n_epochs: int
+        The total number of epochs we want to train for.
+
+    Returns
+    -------
+    An array of number of epochs per sample, one for each 1-simplex.
+    """
+    result = -1.0 * np.ones_like(weights, dtype=np.float64)
+    norm_weights = weights / weights.sum()
+
+    max_w, min_w = norm_weights.max(), norm_weights.min()
+    n_samples = (n_epochs - 1)*(norm_weights - min_w)/(max_w - min_w) + 1
+
+    result[n_samples > 0] = n_epochs/np.float64(n_samples[n_samples > 0])
+    return result
+
+
 def optimize_layout_euclidean(
-    head_embedding,
-    tail_embedding,
-    head,
-    tail,
+    embedding,
     n_epochs,
-    n_vertices,
-    epochs_per_sample,
-    a,
-    b,
-    rng_state,
+    epochs_per_positive_sample,
+    epochs_per_negative_sample,
     gamma=1.0,
     initial_alpha=1.0,
-    negative_sample_rate=5.0,
-    verbose=False,
+    verbose=True,
     tqdm_kwds=None,
 ):
     """Improve an embedding using stochastic gradient descent to minimize the
@@ -453,16 +463,11 @@ def optimize_layout_euclidean(
         The optimized embedding.
     """
 
-    dim = head_embedding.shape[1]
+    dim = embedding.shape[1]
     alpha = initial_alpha
 
-    if negative_sample_rate != 0:
-        epochs_per_negative_sample = epochs_per_sample / negative_sample_rate
-    else:
-        epochs_per_negative_sample = np.zeros(epochs_per_sample.shape)
-
+    epoch_of_next_positive_sample = epochs_per_positive_sample.copy()
     epoch_of_next_negative_sample = epochs_per_negative_sample.copy()
-    epoch_of_next_sample = epochs_per_sample.copy()
 
     # Fix for calling UMAP many times for small datasets, otherwise we spend here
     # a lot of time in compilation step (first call to numba function)
@@ -480,28 +485,17 @@ def optimize_layout_euclidean(
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
 
-    rng_state_per_sample = np.full(
-        (head_embedding.shape[0], len(rng_state)), rng_state, dtype=np.int64
-    ) + head_embedding[:, 0].astype(np.float64).view(np.int64).reshape(-1, 1)
-
     for n in tqdm(range(n_epochs), **tqdm_kwds):
         # n := epoch
         optimize_fn(
-            head_embedding,
-            tail_embedding,
-            head,
-            tail,
-            n_vertices,
-            epochs_per_sample,
-            a,
-            b,
-            rng_state_per_sample,
+            embedding,
+            epochs_per_positive_sample,
+            epochs_per_negative_sample,
             gamma,
             dim,
             alpha,
-            epochs_per_negative_sample,
+            epoch_of_next_positive_sample,
             epoch_of_next_negative_sample,
-            epoch_of_next_sample,
             n,
         )
 
@@ -511,11 +505,11 @@ def optimize_layout_euclidean(
             print("\tcompleted ", n, " / ", n_epochs, "epochs")
 
         if epochs_list is not None and n in epochs_list:
-            embedding_list.append(head_embedding.copy())
+            embedding_list.append(embedding.copy())
 
     # Add the last embedding to the list as well
     if epochs_list is not None:
-        embedding_list.append(head_embedding.copy())
+        embedding_list.append(embedding.copy())
 
-    return head_embedding if epochs_list is None else embedding_list
+    return embedding if epochs_list is None else embedding_list
 
