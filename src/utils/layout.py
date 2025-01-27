@@ -251,7 +251,7 @@ def _optimize_layout_euclidean_single_epoch(
 ):
     # iterate through each pairwise interaction in our graph
     for i in numba.prange(epochs_per_positive_sample.shape[0]):
-        for j in numba.prange(epochs_per_positive_sample.shape[1]):
+        for j in numba.prange(i):
             # current implementation: epoch_of_next_sample == epochs_per_sample (at the beginning)
             # this gets triggered if the number of epochs exceeds the next time sample [i] should be updated
             if epoch_of_next_positive_sample[i][j] <= n:
