@@ -3,6 +3,13 @@ import networkx as nx
 from networkx.utils import np_random_state
 
 
+def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
+    expansion = max_coord / np.abs(coords).max()
+    coords = (coords * expansion).astype(np.float32)
+    return coords + random_state.normal(scale=noise, size=coords.shape).astype(
+        np.float32
+    )
+
 @np_random_state("seed")
 def force_directed_layout(
     G,
@@ -191,32 +198,6 @@ def rdist(x, y):
 
     return result
 
-@numba.njit("i4(i8[:])")
-def tau_rand_int(state):
-    """A fast (pseudo)-random number generator.
-
-    Parameters
-    ----------
-    state: array of int64, shape (3,)
-        The internal state of the rng
-
-    Returns
-    -------
-    A (pseudo)-random int32 value
-    """
-    state[0] = (((state[0] & 4294967294) << 12) & 0xFFFFFFFF) ^ (
-        (((state[0] << 13) & 0xFFFFFFFF) ^ state[0]) >> 19
-    )
-    state[1] = (((state[1] & 4294967288) << 4) & 0xFFFFFFFF) ^ (
-        (((state[1] << 2) & 0xFFFFFFFF) ^ state[1]) >> 25
-    )
-    state[2] = (((state[2] & 4294967280) << 17) & 0xFFFFFFFF) ^ (
-        (((state[2] << 3) & 0xFFFFFFFF) ^ state[2]) >> 11
-    )
-
-    return state[0] ^ state[1] ^ state[2]
-
-
 @numba.njit()
 def clip(val):
     """Standard clamping of a value into a fixed range (in this case -4.0 to
@@ -305,66 +286,6 @@ def _optimize_layout_euclidean_single_epoch(
 _nb_optimize_layout_euclidean_single_epoch = numba.njit(
     _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=True
 )
-
-############### UMAP version ###############
-
-# Note: this implementation might be erroneous, as the result has no dependence
-# on the choice of n_epochs. 
-
-# def make_epochs_per_sample(weights, n_epochs):
-#     """Given a set of weights and number of epochs generate the number of
-#     epochs per sample for each weight.
-
-#     Parameters
-#     ----------
-#     weights: array of shape (n_1_simplices)
-#         The weights of how much we wish to sample each 1-simplex.
-
-#     n_epochs: int
-#         The total number of epochs we want to train for.
-
-#     Returns
-#     -------
-#     An array of number of epochs per sample, one for each 1-simplex.
-#     """
-#     result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
-#     n_samples = n_epochs * (weights / weights.max())
-#     result[n_samples > 0] = float(n_epochs) / np.float64(n_samples[n_samples > 0])
-#     return result
-
-############### UMAP version ###############
-
-
-
-# converts weights to the number of epochs to SKIP for each sample
-# larger weight --> skip fewer epochs
-def make_epochs_per_sample(weights, n_epochs):
-    """Given a set of weights and number of epochs generate the number of
-    epochs per sample for each weight.
-
-    Parameters
-    ----------
-    weights: array of shape (n_1_simplices)
-        The weights of how much we wish to sample each 1-simplex.
-
-    n_epochs: int
-        The total number of epochs we want to train for.
-
-    Returns
-    -------
-    An array of number of epochs per sample, one for each 1-simplex.
-    """
-    result = -1.0 * np.ones(weights.shape[0], dtype=np.float64)
-    norm_weights = weights / weights.sum()
-
-    max_w, min_w = norm_weights.max(), norm_weights.min()
-    n_samples = (n_epochs - 1)*(norm_weights - min_w)/(max_w - min_w) + 1
-
-    result[n_samples > 0] = n_epochs/np.float64(n_samples[n_samples > 0])
-    return result
-
-
-
 
 # converts weights to the number of epochs to SKIP for each sample
 # larger weight --> skip fewer epochs
@@ -500,9 +421,6 @@ def optimize_layout_euclidean(
         )
 
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
-
-        if verbose and n % int(n_epochs / 10) == 0:
-            print("\tcompleted ", n, " / ", n_epochs, "epochs")
 
         if epochs_list is not None and n in epochs_list:
             embedding_list.append(embedding.copy())

@@ -6,18 +6,20 @@ from src.utils.embeddings import *
 import numpy as np
 from src.utils.layout import *
 
-class ORCFA(object):
+
+class EmbedOR(object):
     def __init__(
             self, 
             exp_params, 
             dim=2,
             verbose=False,
             uniform=False,
+            metric='orc',
             seed=10
         ):
 
         """ 
-        Initialize the ORCFA algorithm.
+        Initialize the EmbedOR algorithm.
         Parameters
         ----------
         exp_params : dict
@@ -30,9 +32,10 @@ class ORCFA(object):
         self.k = self.exp_params['n_neighbors']
         self.sigma = self.exp_params['sigma']
         if self.exp_params['mode'] == 'eps':
-            raise NotImplementedError("ORCFA does not support epsilon neighborhoods.")
+            raise NotImplementedError("EmbedOR does not support epsilon neighborhoods.")
         self.verbose = verbose
         self.seed = seed
+        self.metric = metric
         self.uniform = uniform
         self.X = None
 
@@ -44,8 +47,19 @@ class ORCFA(object):
         self._compute_energies()
         self._compute_affinities()
         self._update_G() # add edge attribute 'affinity'
-        print("Running force-directed layout...")
-        self._force_directed_layout()
+        print("Running Stochastic Neighbor Embedding...")
+        if self.metric == 'orc':
+            self._layout(
+                affinities=self.all_affinities_unsigned,
+                repulsions=self.all_repulsions_unsigned
+            )
+        elif self.metric == 'euclidean':
+            self._layout(
+                affinities=self.all_euc_affinities_unsigned,
+                repulsions=self.all_euc_repulsions_unsigned
+            )
+        else:
+            raise ValueError("Invalid metric.")
         return self.embedding
 
     def _update_G(self):
@@ -150,7 +164,7 @@ class ORCFA(object):
         assert np.allclose(self.all_euc_affinities_unsigned, self.all_euc_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
         assert np.allclose(self.all_euc_repulsions_unsigned, self.all_euc_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
 
-    def _force_directed_layout(self):
+    def _layout(self, affinities, repulsions):
         # spectral initialization
         self.spectral_init = nx.spectral_layout(self.G, weight="unsigned_affinity", dim=self.dim, scale=1)
         self.embedding = np.array([self.spectral_init[node] for node in range(len(self.G.nodes()))])
@@ -163,12 +177,6 @@ class ORCFA(object):
         )
 
         # how many epochs to SKIP for each sample
-        self.epochs_per_sample = make_epochs_per_sample(np.array(self.affinities_unsigned), n_epochs=500)
-
-        from src.utils.layout import make_epochs_per_pair
-        affinities = self.all_affinities_unsigned
-        repulsions = self.all_repulsions_unsigned
-
         self.epochs_per_pair_positive = make_epochs_per_pair(affinities, n_epochs=500)
         self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=500)
 
@@ -214,11 +222,3 @@ class ORCFA(object):
         plt.scatter(spectral_init[:, 0], spectral_init[:, 1], c='r', s=10)
         plt.scatter(emb[:, 0], emb[:, 1], c='b', s=10)
         plt.legend(["Spectral Init", "Final Embedding"])
-
-
-def noisy_scale_coords(coords, random_state, max_coord=10.0, noise=0.0001):
-    expansion = max_coord / np.abs(coords).max()
-    coords = (coords * expansion).astype(np.float32)
-    return coords + random_state.normal(scale=noise, size=coords.shape).astype(
-        np.float32
-    )
