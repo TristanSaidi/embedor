@@ -11,7 +11,7 @@ from src.utils.eval_utils import *
 
 # plotting functions
 
-def plot_data_2D(X, color, title, node_size=10, axes=False, exp_name=None, filename=None, cmap=plt.cm.Spectral):
+def plot_data_2D(X, color, title=None, node_size=10, axes=False, exp_name=None, filename=None, cmap=plt.cm.Spectral):
     """
     Plot the data with the points colored by class membership.
     Parameters
@@ -36,7 +36,7 @@ def plot_data_2D(X, color, title, node_size=10, axes=False, exp_name=None, filen
         path = os.path.join(exp_dir, filename)
         plt.savefig(path)
 
-def plot_graph_2D(X, graph, title, node_color='#1f78b4', edge_color='lightgray', node_size=1, edge_width=1.0, colorbar=False, exp_name=None, filename=None):
+def plot_graph_2D(X, graph, title=None, node_color='#1f78b4', edge_color='lightgray', node_size=1, edge_width=1.0, colorbar=False, exp_name=None, filename=None):
     """
     Plot the graph with the desired node or edge coloring.
     Parameters

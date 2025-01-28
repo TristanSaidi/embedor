@@ -58,6 +58,11 @@ class EmbedOR(object):
                 affinities=self.all_euc_affinities_unsigned,
                 repulsions=self.all_euc_repulsions_unsigned
             )
+        elif self.metric == 'adjacency':
+            self._layout(
+                affinities=self.A,
+                repulsions=1-self.A
+            )
         else:
             raise ValueError("Invalid metric.")
         return self.embedding
@@ -109,15 +114,12 @@ class EmbedOR(object):
         assert np.all(np.where(self.A_energy > 0, 1, 0) == self.edge_mask), "invalid entries"
         assert np.all(self.A_energy >= 0), "invalid entries"
 
-        self.apsp_energy = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
-        assert np.all(self.apsp_energy * self.edge_mask <= self.A_energy)
-        self.apsp_euc = scipy.sparse.csgraph.shortest_path(self.A, unweighted=True, directed=False)
-
-        # if disconnected, set inf to 1e10
-        self.apsp_energy[np.isinf(self.apsp_energy)] = 1e10
-        
-        assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
-        assert np.allclose(self.apsp_euc, self.apsp_euc.T), "APSP matrix must be symmetric."
+        if self.metric == 'orc':
+            self.apsp_energy = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
+            assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
+        elif self.metric == 'euclidean':    
+            self.apsp_euc = scipy.sparse.csgraph.shortest_path(self.A, unweighted=False, directed=False)
+            assert np.allclose(self.apsp_euc, self.apsp_euc.T), "APSP matrix must be symmetric."
 
     def _compute_affinities(self):
         # compute affinities
@@ -125,44 +127,49 @@ class EmbedOR(object):
             affinity = 2 * (np.exp(-((energy-1)/self.sigma)**2) - 0.5)
             return affinity
         
-        # compute affinities [without masking]
-        self.all_energies = self.apsp_energy.copy()
-        self.all_affinities = energy_to_affinity(self.all_energies)
-        self.all_affinities_unsigned = 0.5 * (self.all_affinities + 1) 
-        self.all_repulsions_unsigned = 1 - self.all_affinities_unsigned
+        if self.metric == 'orc':
+            # compute affinities [without masking]
+            self.all_energies = self.apsp_energy.copy()
+            self.all_affinities = energy_to_affinity(self.all_energies)
+            self.all_affinities_unsigned = 0.5 * (self.all_affinities + 1) 
+            self.all_repulsions_unsigned = 1 - self.all_affinities_unsigned
+            # set diagonal to 0
+            np.fill_diagonal(self.all_affinities, 0)
+            np.fill_diagonal(self.all_affinities_unsigned, 0)
+            np.fill_diagonal(self.all_repulsions_unsigned, 0)
+            # sanity checks
+            assert np.allclose(self.all_affinities, self.all_affinities.T), "Affinity matrix must be symmetric."
+            assert np.allclose(self.all_affinities_unsigned, self.all_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
+            assert np.allclose(self.all_repulsions_unsigned, self.all_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
 
-        # compute affinities [with masking]
-        self.edge_energy = self.edge_mask * self.apsp_energy
-        self.edge_affinities = energy_to_affinity(self.edge_energy)
-        self.edge_affinities_unsigned = 0.5 * (self.edge_affinities + 1) 
-        self.edge_repulsions_unsigned = 1 - self.edge_affinities_unsigned
+            # compute affinities [with masking]
+            self.edge_energy = self.apsp_energy * self.edge_mask
+            self.edge_affinities = self.all_affinities * self.edge_mask
+            self.edge_affinities_unsigned = (0.5 * (self.edge_affinities + 1)) * self.edge_mask
+            self.edge_repulsions_unsigned = (1 - self.edge_affinities_unsigned) * self.edge_mask
+            # set diagonal to 0
+            np.fill_diagonal(self.edge_affinities, 0)
+            np.fill_diagonal(self.edge_affinities_unsigned, 0)
+            np.fill_diagonal(self.edge_repulsions_unsigned, 0)
+            # sanity checks
+            assert np.allclose(self.edge_affinities, self.edge_affinities.T), "Affinity matrix must be symmetric."
+            assert np.allclose(self.edge_affinities_unsigned, self.edge_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
+            assert np.allclose(self.edge_repulsions_unsigned, self.edge_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
 
-        # compute isomap affinities [without masking]
-        self.all_euc = self.apsp_euc.copy()
-        self.all_euc_affinities = energy_to_affinity(self.all_euc)
-        self.all_euc_affinities_unsigned = 0.5 * (self.all_euc_affinities + 1)
-        self.all_euc_repulsions_unsigned = 1 - self.all_euc_affinities_unsigned
-        np.fill_diagonal(self.all_euc_affinities, 0)
-        np.fill_diagonal(self.all_euc_affinities_unsigned, 0)
 
-        self.edge_affinities *= self.edge_mask
-        self.edge_affinities_unsigned *= self.edge_mask
-        # set diagonal to 0
-        np.fill_diagonal(self.edge_affinities, 0)
-        np.fill_diagonal(self.edge_affinities_unsigned, 0)
-        np.fill_diagonal(self.edge_repulsions_unsigned, 0)
-        np.fill_diagonal(self.all_affinities, 0)
-        np.fill_diagonal(self.all_affinities_unsigned, 0)
-        np.fill_diagonal(self.all_repulsions_unsigned, 0)
-
-        assert np.allclose(self.edge_affinities, self.edge_affinities.T), "Affinity matrix must be symmetric."
-        assert np.allclose(self.edge_affinities_unsigned, self.edge_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
-        assert np.allclose(self.all_affinities, self.all_affinities.T), "Affinity matrix must be symmetric."
-        assert np.allclose(self.all_affinities_unsigned, self.all_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
-        assert np.allclose(self.edge_repulsions_unsigned, self.edge_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
-        assert np.allclose(self.all_repulsions_unsigned, self.all_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
-        assert np.allclose(self.all_euc_affinities_unsigned, self.all_euc_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
-        assert np.allclose(self.all_euc_repulsions_unsigned, self.all_euc_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
+        elif self.metric == 'euclidean':
+            # compute isomap affinities [without masking]
+            self.all_euc = self.apsp_euc.copy()
+            self.all_euc_affinities = energy_to_affinity(self.all_euc)
+            self.all_euc_affinities_unsigned = 0.5 * (self.all_euc_affinities + 1)
+            self.all_euc_repulsions_unsigned = 1 - self.all_euc_affinities_unsigned
+            np.fill_diagonal(self.all_euc_affinities, 0)
+            np.fill_diagonal(self.all_euc_affinities_unsigned, 0)
+            np.fill_diagonal(self.all_euc_repulsions_unsigned, 0)
+            # sanity checks
+            assert np.allclose(self.all_euc_affinities, self.all_euc_affinities.T), "Affinity matrix must be symmetric."
+            assert np.allclose(self.all_euc_affinities_unsigned, self.all_euc_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
+            assert np.allclose(self.all_euc_repulsions_unsigned, self.all_euc_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
 
     def _layout(self, affinities, repulsions):
         # spectral initialization
