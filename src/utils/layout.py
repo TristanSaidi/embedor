@@ -303,7 +303,7 @@ def _optimize_layout_euclidean_single_epoch(
 
 
 _nb_optimize_layout_euclidean_single_epoch = numba.njit(
-    _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=False
+    _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=True
 )
 
 ############### UMAP version ###############

@@ -97,10 +97,13 @@ class ORCFA(object):
 
         self.apsp_energy = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
         assert np.all(self.apsp_energy * self.edge_mask <= self.A_energy)
+        self.apsp_euc = scipy.sparse.csgraph.shortest_path(self.A, unweighted=True, directed=False)
+
         # if disconnected, set inf to 1e10
         self.apsp_energy[np.isinf(self.apsp_energy)] = 1e10
         
         assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
+        assert np.allclose(self.apsp_euc, self.apsp_euc.T), "APSP matrix must be symmetric."
 
     def _compute_affinities(self):
         # compute affinities
@@ -119,7 +122,14 @@ class ORCFA(object):
         self.edge_affinities = energy_to_affinity(self.edge_energy)
         self.edge_affinities_unsigned = 0.5 * (self.edge_affinities + 1) 
         self.edge_repulsions_unsigned = 1 - self.edge_affinities_unsigned
-        
+
+        # compute isomap affinities [without masking]
+        self.all_euc = self.apsp_euc.copy()
+        self.all_euc_affinities = energy_to_affinity(self.all_euc)
+        self.all_euc_affinities_unsigned = 0.5 * (self.all_euc_affinities + 1)
+        self.all_euc_repulsions_unsigned = 1 - self.all_euc_affinities_unsigned
+        np.fill_diagonal(self.all_euc_affinities, 0)
+        np.fill_diagonal(self.all_euc_affinities_unsigned, 0)
 
         self.edge_affinities *= self.edge_mask
         self.edge_affinities_unsigned *= self.edge_mask
@@ -135,6 +145,10 @@ class ORCFA(object):
         assert np.allclose(self.edge_affinities_unsigned, self.edge_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
         assert np.allclose(self.all_affinities, self.all_affinities.T), "Affinity matrix must be symmetric."
         assert np.allclose(self.all_affinities_unsigned, self.all_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
+        assert np.allclose(self.edge_repulsions_unsigned, self.edge_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
+        assert np.allclose(self.all_repulsions_unsigned, self.all_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
+        assert np.allclose(self.all_euc_affinities_unsigned, self.all_euc_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
+        assert np.allclose(self.all_euc_repulsions_unsigned, self.all_euc_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
 
     def _force_directed_layout(self):
         # spectral initialization
@@ -152,8 +166,11 @@ class ORCFA(object):
         self.epochs_per_sample = make_epochs_per_sample(np.array(self.affinities_unsigned), n_epochs=500)
 
         from src.utils.layout import make_epochs_per_pair
-        self.epochs_per_pair_positive = make_epochs_per_pair(self.all_affinities_unsigned, n_epochs=500)
-        self.epochs_per_pair_negative = make_epochs_per_pair(self.all_repulsions_unsigned, n_epochs=500)
+        affinities = self.all_affinities_unsigned
+        repulsions = self.all_repulsions_unsigned
+
+        self.epochs_per_pair_positive = make_epochs_per_pair(affinities, n_epochs=500)
+        self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=500)
 
         self.embedding = (
             10.0
@@ -161,13 +178,14 @@ class ORCFA(object):
             / (np.max(self.embedding, 0) - np.min(self.embedding, 0))
         ).astype(np.float32, order="C")
 
-        # self.gamma = (self.X.shape[0] ** 2 - np.sum(self.all_affinities_unsigned)) / np.sum(self.all_affinities_unsigned)
-        # print("Gamma: ", self.gamma)
-        self.gamma = 1e-3
-        # convert graph to scipy sparse matrix
+        # number of pairs
+        npairs = (self.X.shape[0]**2 - self.X.shape[0])/2
+        Z = np.sum(affinities)/2
+        self.gamma = ((npairs - Z) / Z) * (self.k / self.X.shape[0]**2)
+
         self.embedding = optimize_layout_euclidean(
             self.embedding, 
-            n_epochs=50,
+            n_epochs=100,
             epochs_per_positive_sample=self.epochs_per_pair_positive,
             epochs_per_negative_sample=self.epochs_per_pair_negative,
             gamma=self.gamma,
