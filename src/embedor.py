@@ -1,5 +1,4 @@
 from src.data.data import *
-from src.orcml import *
 from src.plotting import *
 from src.utils.graph_utils import *
 from src.utils.embeddings import *
@@ -31,6 +30,7 @@ class EmbedOR(object):
         self.exp_params = exp_params
         self.k = self.exp_params['n_neighbors']
         self.sigma = self.exp_params['sigma']
+        self.alpha = self.exp_params.get('alpha', 0)
         if self.exp_params['mode'] == 'eps':
             raise NotImplementedError("EmbedOR does not support epsilon neighborhoods.")
         self.verbose = verbose
@@ -40,13 +40,7 @@ class EmbedOR(object):
         self.X = None
 
     def fit_transform(self, X=None):
-        self.X = X
-        print("Building nearest neighbor graph...")
-        self._build_nnG() # self.G, self.orcs, self.A are now available
-        print("Computing energies and affinities...")
-        self._compute_energies()
-        self._compute_affinities()
-        self._update_G() # add edge attribute 'affinity'
+        self.fit(X)
         print("Running Stochastic Neighbor Embedding...")
         if self.metric == 'orc':
             self._layout(
@@ -66,6 +60,16 @@ class EmbedOR(object):
         else:
             raise ValueError("Invalid metric.")
         return self.embedding
+
+    def fit(self, X=None):
+        self.X = X
+        print("Building nearest neighbor graph...")
+        self._build_nnG() # self.G, self.orcs, self.A are now available
+        print("Computing energies and affinities...")
+        self._compute_energies()
+        self._compute_affinities()
+        if self.metric == 'orc':
+            self._update_G() # add edge attribute 'affinity'
 
     def _update_G(self):
         self.affinities = []
@@ -102,15 +106,22 @@ class EmbedOR(object):
         energies = []        
         for u, v in self.G.edges():
             orc = self.G[u][v]['ricciCurvature']
-            energy = min(
-                -np.log(orc + 2) + np.log(3) + 1, # energy(+1) = 0, energy(-2) = infty,
-                max_energy
-            )
+            
+            c = 1/(np.log(3) - np.log(2))
+            energy = (-c*np.log(orc + 2) + c*np.log(2) + 1) ** self.alpha + 1 # energy(+1) = 0, energy(-2) = infty,
+            
+            ### orcmanl ###
+            # if orc < 0.0:
+            #     energy = np.inf
+            # else:
+            #     energy = 1
+            
             self.G[u][v]['energy'] = energy
             energies.append(energy)
         
         self.A_energy = nx.to_numpy_array(self.G, weight='energy', nodelist=list(range(len(self.G.nodes()))))
-
+        assert np.allclose(self.A_energy, self.A_energy.T), "Energy matrix must be symmetric."
+        
         assert np.all(np.where(self.A_energy > 0, 1, 0) == self.edge_mask), "invalid entries"
         assert np.all(self.A_energy >= 0), "invalid entries"
 
