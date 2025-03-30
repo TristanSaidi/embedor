@@ -279,15 +279,9 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     for i in range(n_points):
         G.add_node(i)
         G.nodes[i]['pos'] = X[i] # store the position of the node
-        G.nodes[i]['vel'] = np.zeros(X.shape[1]) # store the velocity of the node
         for j in range(i+1, n_points):
             if A[i, j] > 0:
                 G.add_edge(i, j, weight=A[i, j]) # weight is the euclidean distance
-                if mode == 'eps':
-                    G[i][j]['effective_eps'] = epsilon
-                else: # estimate effective epsilon as the average of the k-nearest neighbors
-                    effective_eps = compute_eff_eps_adj(A, n_neighbors, (i, j))
-                    G[i][j]['effective_eps'] = effective_eps
                 nodes.add(i)
                 nodes.add(j)
 
