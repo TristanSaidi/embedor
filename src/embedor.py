@@ -9,11 +9,9 @@ from src.utils.layout import *
 class EmbedOR(object):
     def __init__(
             self, 
-            exp_params, 
+            exp_params = {}, 
             dim=2,
             verbose=False,
-            uniform=False,
-            metric='orc',
             seed=10
         ):
 
@@ -28,37 +26,27 @@ class EmbedOR(object):
         """
         self.dim = dim
         self.exp_params = exp_params
-        self.k = self.exp_params['n_neighbors']
-        self.sigma = self.exp_params['sigma']
-        self.alpha = self.exp_params.get('alpha', 0)
-        if self.exp_params['mode'] == 'eps':
-            raise NotImplementedError("EmbedOR does not support epsilon neighborhoods.")
+        self.k = self.exp_params.get('n_neighbors', 15)
+        self.sigma = self.exp_params.get('sigma', 30)
+        self.alpha = self.exp_params.get('alpha', 4)
+        self.exp_params = {
+            'mode': 'nbrs',
+            'n_neighbors': self.k,
+            'sigma': self.sigma,
+            'alpha': self.alpha,
+        }
+
         self.verbose = verbose
         self.seed = seed
-        self.metric = metric
-        self.uniform = uniform
         self.X = None
 
     def fit_transform(self, X=None):
         self.fit(X)
         print("Running Stochastic Neighbor Embedding...")
-        if self.metric == 'orc':
-            self._layout(
-                affinities=self.all_affinities_unsigned,
-                repulsions=self.all_repulsions_unsigned
-            )
-        elif self.metric == 'euclidean':
-            self._layout(
-                affinities=self.all_euc_affinities_unsigned,
-                repulsions=self.all_euc_repulsions_unsigned
-            )
-        elif self.metric == 'adjacency':
-            self._layout(
-                affinities=self.A,
-                repulsions=1-self.A
-            )
-        else:
-            raise ValueError("Invalid metric.")
+        self._layout(
+            affinities=self.all_affinities,
+            repulsions=self.all_repulsions
+        )
         return self.embedding
 
     def fit(self, X=None):
@@ -68,22 +56,17 @@ class EmbedOR(object):
         print("Computing energies and affinities...")
         self._compute_energies()
         self._compute_affinities()
-        if self.metric == 'orc':
-            self._update_G() # add edge attribute 'affinity'
+        self._update_G() # add edge attribute 'affinity'
 
     def _update_G(self):
         self.affinities = []
         self.energies = []
-        self.affinities_unsigned = []
-        node_indices = list(self.G.nodes())
         for i, (u,v) in enumerate(self.G.edges):
             idx_u = u
             idx_v = v
-            self.G[u][v]['signed_affinity'] = self.edge_affinities[idx_u, idx_v]
-            self.G[u][v]['unsigned_affinity'] = self.edge_affinities_unsigned[idx_u, idx_v]
-            self.affinities.append(self.edge_affinities[idx_u, idx_v])
-            self.affinities_unsigned.append(self.edge_affinities_unsigned[idx_u, idx_v])
-            self.energies.append(self.edge_energy[idx_u, idx_v])
+            self.G[u][v]['affinity'] = self.all_affinities[idx_u, idx_v]
+            self.affinities.append(self.all_affinities[idx_u, idx_v])
+            self.energies.append(self.all_energies[idx_u, idx_v])
 
     def _build_nnG(self):
         """
@@ -91,6 +74,10 @@ class EmbedOR(object):
         """
         if self.X is None:
             raise ValueError("Data must be provided to build the nearest neighbor graph.")
+        # compute diameter
+        from sklearn.metrics import pairwise_distances
+        self.diameter = np.max(pairwise_distances(self.X))
+        # compute nearest neighbor graph
         return_dict = get_nn_graph(self.X, self.exp_params)
         G = return_dict['G']
         # compute ORC
@@ -101,7 +88,7 @@ class EmbedOR(object):
         self.edge_mask = np.where(self.A > 0, 1, 0)
 
 
-    def _compute_energies(self, max_energy=np.inf):
+    def _compute_energies(self):
         # compute energy for each edge
         energies = []        
         for u, v in self.G.edges():
@@ -109,13 +96,7 @@ class EmbedOR(object):
             
             c = 1/(np.log(3) - np.log(2))
             energy = (-c*np.log(orc + 2) + c*np.log(2) + 1) ** self.alpha + 1 # energy(+1) = 0, energy(-2) = infty,
-            
-            ### orcmanl ###
-            # if orc < 0.0:
-            #     energy = np.inf
-            # else:
-            #     energy = 1
-            
+            energy = energy * self.G[u][v]['weight'] # scale energy by weight
             self.G[u][v]['energy'] = energy
             energies.append(energy)
         
@@ -125,66 +106,31 @@ class EmbedOR(object):
         assert np.all(np.where(self.A_energy > 0, 1, 0) == self.edge_mask), "invalid entries"
         assert np.all(self.A_energy >= 0), "invalid entries"
 
-        if self.metric == 'orc':
-            self.apsp_energy = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
-            assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
-        elif self.metric == 'euclidean':    
-            self.apsp_euc = scipy.sparse.csgraph.shortest_path(self.A, unweighted=False, directed=False)
-            assert np.allclose(self.apsp_euc, self.apsp_euc.T), "APSP matrix must be symmetric."
+        self.apsp_energy = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
+        assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
+        self.apsp_energy /= self.diameter
+        print(f"Max APSP energy: {np.max(self.apsp_energy)}")
 
     def _compute_affinities(self):
         # compute affinities
         def energy_to_affinity(energy):
-            affinity = 2 * (np.exp(-((energy-1)/self.sigma)**2) - 0.5)
+            affinity = np.exp(-self.sigma * (energy)**2)
             return affinity
         
-        if self.metric == 'orc':
-            # compute affinities [without masking]
-            self.all_energies = self.apsp_energy.copy()
-            self.all_affinities = energy_to_affinity(self.all_energies)
-            self.all_affinities_unsigned = 0.5 * (self.all_affinities + 1) 
-            self.all_repulsions_unsigned = 1 - self.all_affinities_unsigned
-            # set diagonal to 0
-            np.fill_diagonal(self.all_affinities, 0)
-            np.fill_diagonal(self.all_affinities_unsigned, 0)
-            np.fill_diagonal(self.all_repulsions_unsigned, 0)
-            # sanity checks
-            assert np.allclose(self.all_affinities, self.all_affinities.T), "Affinity matrix must be symmetric."
-            assert np.allclose(self.all_affinities_unsigned, self.all_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
-            assert np.allclose(self.all_repulsions_unsigned, self.all_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
-
-            # compute affinities [with masking]
-            self.edge_energy = self.apsp_energy * self.edge_mask
-            self.edge_affinities = self.all_affinities * self.edge_mask
-            self.edge_affinities_unsigned = (0.5 * (self.edge_affinities + 1)) * self.edge_mask
-            self.edge_repulsions_unsigned = (1 - self.edge_affinities_unsigned) * self.edge_mask
-            # set diagonal to 0
-            np.fill_diagonal(self.edge_affinities, 0)
-            np.fill_diagonal(self.edge_affinities_unsigned, 0)
-            np.fill_diagonal(self.edge_repulsions_unsigned, 0)
-            # sanity checks
-            assert np.allclose(self.edge_affinities, self.edge_affinities.T), "Affinity matrix must be symmetric."
-            assert np.allclose(self.edge_affinities_unsigned, self.edge_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
-            assert np.allclose(self.edge_repulsions_unsigned, self.edge_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
-
-
-        elif self.metric == 'euclidean':
-            # compute isomap affinities [without masking]
-            self.all_euc = self.apsp_euc.copy()
-            self.all_euc_affinities = energy_to_affinity(self.all_euc)
-            self.all_euc_affinities_unsigned = 0.5 * (self.all_euc_affinities + 1)
-            self.all_euc_repulsions_unsigned = 1 - self.all_euc_affinities_unsigned
-            np.fill_diagonal(self.all_euc_affinities, 0)
-            np.fill_diagonal(self.all_euc_affinities_unsigned, 0)
-            np.fill_diagonal(self.all_euc_repulsions_unsigned, 0)
-            # sanity checks
-            assert np.allclose(self.all_euc_affinities, self.all_euc_affinities.T), "Affinity matrix must be symmetric."
-            assert np.allclose(self.all_euc_affinities_unsigned, self.all_euc_affinities_unsigned.T), "Unsigned affinity matrix must be symmetric."
-            assert np.allclose(self.all_euc_repulsions_unsigned, self.all_euc_repulsions_unsigned.T), "Repulsion matrix must be symmetric."
+        # compute affinities [without masking]
+        self.all_energies = self.apsp_energy.copy()
+        self.all_affinities = energy_to_affinity(self.all_energies)
+        self.all_repulsions = 1 - self.all_affinities
+        # set diagonal to 0, 1 respectively
+        np.fill_diagonal(self.all_affinities, 1)
+        np.fill_diagonal(self.all_repulsions, 0)
+        # sanity checks
+        assert np.allclose(self.all_affinities, self.all_affinities.T), "Affinity matrix must be symmetric."
+        assert np.allclose(self.all_repulsions, self.all_repulsions.T), "Repulsion matrix must be symmetric."
 
     def _layout(self, affinities, repulsions):
         # spectral initialization
-        self.spectral_init = nx.spectral_layout(self.G, weight="unsigned_affinity", dim=self.dim, scale=1)
+        self.spectral_init = nx.spectral_layout(self.G, weight="affinity", dim=self.dim, scale=1)
         self.embedding = np.array([self.spectral_init[node] for node in range(len(self.G.nodes()))])
         
         # convert to array
@@ -199,7 +145,7 @@ class EmbedOR(object):
         self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=500)
 
         self.embedding = (
-            10.0
+            1.0
             * (self.embedding - np.min(self.embedding, 0))
             / (np.max(self.embedding, 0) - np.min(self.embedding, 0))
         ).astype(np.float32, order="C")
@@ -208,6 +154,7 @@ class EmbedOR(object):
         npairs = (self.X.shape[0]**2 - self.X.shape[0])/2
         Z = np.sum(affinities)/2
         self.gamma = ((npairs - Z) / Z) * (self.k / self.X.shape[0]**2)
+        print(f"Computed gamma: {self.gamma}")
 
         self.embedding = optimize_layout_euclidean(
             self.embedding, 
@@ -215,7 +162,7 @@ class EmbedOR(object):
             epochs_per_positive_sample=self.epochs_per_pair_positive,
             epochs_per_negative_sample=self.epochs_per_pair_negative,
             gamma=self.gamma,
-            initial_alpha=0.25,
+            initial_alpha=1,
         )
 
     def plot_energies(self):
@@ -240,3 +187,11 @@ class EmbedOR(object):
         plt.scatter(spectral_init[:, 0], spectral_init[:, 1], c='r', s=10)
         plt.scatter(emb[:, 0], emb[:, 1], c='b', s=10)
         plt.legend(["Spectral Init", "Final Embedding"])
+
+    def plot_apsp_energy(self):
+        plt.figure()
+        plt.hist(self.apsp_energy.flatten(), bins=100)
+        plt.title("APSP Energy Distribution")
+        plt.xlabel("APSP Energy")
+        plt.ylabel("Count")
+        plt.show()

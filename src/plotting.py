@@ -11,7 +11,7 @@ from src.utils.eval_utils import *
 
 # plotting functions
 
-def plot_data_2D(X, color, title=None, node_size=10, axes=False, exp_name=None, filename=None, cmap=plt.cm.Spectral):
+def plot_data_2D(X, color, title=None, node_size=10, axes=False, exp_name=None, filename=None, cmap=plt.cm.viridis):
     """
     Plot the data with the points colored by class membership.
     Parameters
