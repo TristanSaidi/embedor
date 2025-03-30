@@ -56,7 +56,7 @@ def plot_graph_2D(X, graph, title=None, node_color='#1f78b4', edge_color='lightg
         edge_cmap = plt.cm.viridis
     else:
         edge_cmap = plt.cm.coolwarm
-    plt.figure(dpi=1200)
+    plt.figure(figsize=(6,6), dpi=200)
     if type(edge_color) != str:
         mean, std = np.mean(edge_color), np.std(edge_color)
         edge_vmin = mean - 2*std
@@ -153,7 +153,7 @@ def plot_data_3D(X, color, title, exp_name=None, filename=None, axes=False, node
     fig.show()
     return fig
 
-def plot_graph_3D(X, graph, title, node_color='#1f78b4', node_size=3, edge_width=0.5, edge_color='lightgrey', colorbar=False, camera=None, exp_name=None, filename=None, axes=False, cmap='Viridis', opacity=None, cmin=-1, cmax=1, node_colorbar=False, node_colorbar_title=None):
+def plot_graph_3D(X, graph, title, node_color='#1f78b4', node_size=3, edge_width=0.5, edge_color='lightgrey', colorbar=False, camera=None, exp_name=None, filename=None, axes=False, cmap='Viridis', opacity=None, cmin=None, cmax=None, edge_cmin=None, edge_cmax=None, node_colorbar=False, node_colorbar_title=None):
     """
     Plot the graph with the desired node or edge coloring.
     Parameters
@@ -172,6 +172,18 @@ def plot_graph_3D(X, graph, title, node_color='#1f78b4', node_size=3, edge_width
     edge_x = []
     edge_y = []
     edge_z = []
+    if cmin is None or cmax is None and type(node_color) != str:
+        cmin = min(node_color)
+        cmax = max(node_color)
+    else:
+        cmin = -1
+        cmax = 1
+    if (edge_cmin is None or edge_cmax is None) and type(edge_color) != str and edge_color is not None:
+        edge_cmin = min(edge_color)
+        edge_cmax = max(edge_color)
+    else:
+        edge_cmin = -1
+        edge_cmax = 1
     for edge in graph.edges():
         x0, y0, z0 = X[edge[0]]
         x1, y1, z1 = X[edge[1]]
@@ -185,15 +197,15 @@ def plot_graph_3D(X, graph, title, node_color='#1f78b4', node_size=3, edge_width
         line=dict(
             width=edge_width,
             color=np.repeat(edge_color, 3),
-            colorscale='Spectral_r',
+            colorscale='Spectral',
             colorbar=dict(
                 thickness=15,
                 title='ORC',
                 xanchor='left',
                 titleside='right',
             ) if colorbar else None,
-            cmin=-1,
-            cmax=1,
+            cmin=edge_cmin,
+            cmax=edge_cmax,
         ),
         opacity=opacity,
         showlegend=False
