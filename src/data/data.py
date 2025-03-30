@@ -39,7 +39,7 @@ def concentric_circles(n_points, factor, noise, supersample=False, supersample_f
     else:
         N_total = n_points
         subsample_indices = None
-    circles, cluster = datasets.make_circles(n_samples=N_total, factor=factor)
+    circles, cluster, geodesic_distances = make_circles(n_samples=N_total, factor=factor)
     if supersample:
         circles_supersample = circles.copy()
         circles = circles[subsample_indices]
@@ -62,7 +62,8 @@ def concentric_circles(n_points, factor, noise, supersample=False, supersample_f
         'data': circles,
         'cluster': cluster,
         'data_supersample': circles_supersample,
-        'subsample_indices': subsample_indices
+        'subsample_indices': subsample_indices,
+        'geodesic_distances': geodesic_distances
     }
     return return_dict
 
@@ -165,10 +166,11 @@ def moons(n_points, noise, supersample=False, supersample_factor=2.5, noise_thre
 
     # clip noise and resample if necessary
     z =  noise*np.random.randn(*moons.shape)
-    resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
-    while len(resample_indices) > 0:
-        z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+    if noise_thresh is not None:
         resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
+        while len(resample_indices) > 0:
+            z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+            resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
     moons += z
 
     return_dict = {
@@ -204,7 +206,15 @@ def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5
     else:
         N_total = n_points
         subsample_indices = None
-    swiss_roll, color = datasets.make_swiss_roll(N_total, hole=hole)
+    swiss_roll, t, y = make_swiss_roll(N_total, hole=hole)
+    color = t
+    # scale t to match that of the embedded manifold
+    t = t * (89.37) / (3 * np.pi)
+    # compute pairwise geodesic distances
+    coordinates = np.stack([t, y], axis=1)
+    import sklearn.metrics
+    distances = sklearn.metrics.pairwise_distances(coordinates, metric='euclidean')
+    
     if dim == 2:
         swiss_roll = swiss_roll[:, [0, 2]]
     if supersample:
@@ -228,8 +238,10 @@ def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5
         'data': swiss_roll,
         'cluster': None,
         'color': color,
+        'geodesic_distances': distances,
         'data_supersample': swiss_roll_supersample,
-        'subsample_indices': subsample_indices
+        'subsample_indices': subsample_indices,
+        'coordinates': coordinates
     }
     return return_dict
 
