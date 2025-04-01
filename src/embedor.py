@@ -139,49 +139,19 @@ class EmbedOR(object):
             self.apsp_euclidean = scipy.sparse.csgraph.shortest_path(self.A, unweighted=False, directed=False)
             assert np.allclose(self.apsp_euclidean, self.apsp_euclidean.T), "APSP matrix must be symmetric."
 
-    def _compute_affinities(self, max_energy_scale=5):
-        # compute affinities
-        def energy_to_affinity(energy):
-            affinity = np.exp(-energy**2)
-            return affinity
-        
-        # compute affinities [without masking]
+    def _compute_affinities(self):
         self.all_energies = self.apsp_energy.copy()
-        # scale so kth nearest neighbor is 1
-        sorted_energies = np.sort(self.all_energies, axis=1)
-        kth_energies = sorted_energies[:, self.k_scale*self.k]
-        # divide by kth energy
-        kth_energies = np.expand_dims(kth_energies, axis=1)
-        kth_energies = np.repeat(kth_energies, self.all_energies.shape[1], axis=1)
-        self.all_energies = self.all_energies / kth_energies
-        # clip energies to max_energy_scale row-wise
-        self.all_energies = np.clip(self.all_energies, 0, max_energy_scale)
-
-        # also scale apsp_euclidean if available
-        if not self.fast:
-            self.all_energies_euclidean = self.apsp_euclidean.copy()
-            sorted_energies = np.sort(self.all_energies_euclidean, axis=1)
-            kth_energies = sorted_energies[:, self.k_scale*self.k]
-            kth_energies = np.expand_dims(kth_energies, axis=1)
-            kth_energies = np.repeat(kth_energies, self.all_energies.shape[1], axis=1)
-            self.all_energies_euclidean = self.all_energies_euclidean / kth_energies
-            # clip energies to max_energy_scale row-wise
-            self.all_energies_euclidean = np.clip(self.all_energies_euclidean, 0, max_energy_scale)
-
-        self.all_affinities = energy_to_affinity(self.all_energies)
-        # ensure min affinity is 1e-5
-        self.all_affinities = np.clip(self.all_affinities, 1e-5, 1)
+        from scipy.spatial.distance import squareform
+        assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
+        self.all_affinities = squareform(joint_probabilities(self.apsp_energy, desired_perplexity=2*self.k, verbose=0))
         self.all_repulsions = 1 - self.all_affinities
-        # set diagonal to 0, 1 respectively
-        np.fill_diagonal(self.all_affinities, 0)
-        np.fill_diagonal(self.all_repulsions, 0)
 
     def _init_embedding(self):
         # spectral initialization
         self.spectral_init = nx.spectral_layout(self.G, weight="affinity", dim=self.dim, scale=1)
         self.spectral_init = np.array([self.spectral_init[node] for node in range(len(self.G.nodes()))])
         self.embedding = self.spectral_init.copy()
-        # scale the embedding to [-5, 5] x [-5, 5]
+        # scale the embedding to [-0.5, 0.5] x [-0.5, 0.5]
         self.embedding = (self.embedding - np.min(self.embedding, axis=0)) / (
             np.max(self.embedding, axis=0) - np.min(self.embedding, axis=0)
         ) * 1 - 0.5
@@ -189,17 +159,20 @@ class EmbedOR(object):
 
     def _layout(self, affinities, repulsions):
 
-        n_epochs = 200
+        n_epochs = 500
         # how many epochs to SKIP for each sample
         self.epochs_per_pair_positive = make_epochs_per_pair(affinities, n_epochs=n_epochs)
         self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=n_epochs)
-
-
+        # print min and max of epochs_per_pair
+        print(f"Min epochs per pair positive: {np.min(self.epochs_per_pair_positive)}")
+        print(f"Max epochs per pair positive: {np.max(self.epochs_per_pair_positive)}")
+        print(f"Min epochs per pair negative: {np.min(self.epochs_per_pair_negative)}")
+        print(f"Max epochs per pair negative: {np.max(self.epochs_per_pair_negative)}")
         # compute gamma
         N = self.X.shape[0]
         npairs = (N**2 -N)/2
         Z = (np.sum(affinities) - np.trace(affinities))/2
-        self.gamma = (npairs - Z)/(Z * npairs)
+        self.gamma = (npairs - Z)/(Z*npairs*50)
         print(f"Gamma: {self.gamma}")
 
         self.embedding = optimize_layout_euclidean(

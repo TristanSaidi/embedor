@@ -482,3 +482,37 @@ def optimize_layout_euclidean(
 
     return embedding if epochs_list is None else embedding_list
 
+
+from sklearn.manifold._utils import _binary_search_perplexity
+MACHINE_EPSILON = np.finfo(np.double).eps
+from scipy.spatial.distance import squareform
+
+def joint_probabilities(distances, desired_perplexity, verbose):
+    """Compute joint probabilities p_ij from distances.
+
+    Parameters
+    ----------
+    distances : ndarray of shape (n_samples * (n_samples-1) / 2,)
+        Distances of samples are stored as condensed matrices, i.e.
+        we omit the diagonal and duplicate entries and store everything
+        in a one-dimensional array.
+
+    desired_perplexity : float
+        Desired perplexity of the joint probability distributions.
+
+    verbose : int
+        Verbosity level.
+
+    Returns
+    -------
+    P : ndarray of shape (n_samples * (n_samples-1) / 2,)
+        Condensed joint probability matrix.
+    """
+    # Compute conditional probabilities such that they approximately match
+    # the desired perplexity
+    distances = distances.astype(np.float32, copy=False)
+    conditional_P = _binary_search_perplexity(
+        distances, desired_perplexity, verbose
+    )
+    P = conditional_P + conditional_P.T
+    return squareform(P)
