@@ -230,9 +230,12 @@ def _optimize_layout_euclidean_single_epoch(
     epoch_of_next_negative_sample,
     n,
 ):
+    loss = 0.0
     # iterate through each pairwise interaction in our graph
     for i in numba.prange(epochs_per_positive_sample.shape[0]):
         for j in numba.prange(i):
+            if i == j:
+                continue
             # current implementation: epoch_of_next_sample == epochs_per_sample (at the beginning)
             # this gets triggered if the number of epochs exceeds the next time sample [i] should be updated
             if epoch_of_next_positive_sample[i][j] <= n:
@@ -242,7 +245,6 @@ def _optimize_layout_euclidean_single_epoch(
 
                 dist_squared = rdist(current, other)
 
-
                 if dist_squared > 0.0:
                     grad_coeff = -2.0 * 1.0 * 1.0 * pow(dist_squared, 1.0 - 1.0)
                     grad_coeff /= 1.0 * pow(dist_squared, 1.0) + 1.0
@@ -250,7 +252,7 @@ def _optimize_layout_euclidean_single_epoch(
                     grad_coeff = 0.0
 
                 for d in range(dim):
-                    grad_d = clip(grad_coeff * (current[d] - other[d]))
+                    grad_d = grad_coeff * (current[d] - other[d])
                     current[d] += grad_d * alpha
                     other[d] += -grad_d * alpha
 
@@ -262,26 +264,23 @@ def _optimize_layout_euclidean_single_epoch(
                 other = embedding[j]
 
                 dist_squared = rdist(current, other)
-
+                loss += (1-(1/(1+pow(dist_squared, 2.0))))
                 if dist_squared > 0.0:
                     grad_coeff = 2.0 * gamma * 1.0
                     grad_coeff /= (0.001 + dist_squared) * (
                         1.0 * pow(dist_squared, 1.0) + 1
                     )
-                elif i == j:
-                    continue
                 else:
                     grad_coeff = 0.0
 
                 for d in range(dim):
                     if grad_coeff > 0.0:
-                        grad_d = clip(grad_coeff * (current[d] - other[d]))
+                        grad_d = grad_coeff * (current[d] - other[d])
                     else:
                         grad_d = 0
                     current[d] += grad_d * alpha
                 
                 epoch_of_next_negative_sample[i][j] += epochs_per_negative_sample[i][j] # update sample i in [epochs_per_sample] epochs
-
 
 _nb_optimize_layout_euclidean_single_epoch = numba.njit(
     _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=True
@@ -314,7 +313,7 @@ _nb_optimize_layout_euclidean_single_epoch = numba.njit(
 #     result[n_samples > 0] = n_epochs/np.float64(n_samples[n_samples > 0])
 #     return result
 
-def make_epochs_per_pair(weights, n_epochs, max_iter=None):
+def make_epochs_per_pair(weights, n_epochs, max_iter=None, min_iter=None):
     """Given a set of weights and number of epochs generate the number of
     epochs per sample for each weight.
 
@@ -332,14 +331,38 @@ def make_epochs_per_pair(weights, n_epochs, max_iter=None):
     """
     if max_iter == None:
         max_iter = n_epochs
+    elif min_iter == None:
+        min_iter = 0
     result = -1.0 * np.ones_like(weights, dtype=np.float64)
     max_w, min_w = weights.max(), weights.min()
     norm_weights = (weights - min_w) / (max_w - min_w)
-    n_samples = max_iter * norm_weights
+    n_samples = ((max_iter-min_iter) * norm_weights + min_iter).astype(int)
     result[n_samples > 0] = n_epochs/np.float64(n_samples[n_samples > 0])
     result[n_samples == 0] = n_epochs
-    print()
+    return result
 
+def make_epochs_per_pair(weights, n_epochs, max_iter=None, min_iter=None):
+    """Given a set of weights and number of epochs generate the number of
+    epochs per sample for each weight.
+
+    Parameters
+    ----------
+    weights: array of shape (n, n)
+        The weights of how much we wish to sample each 1-simplex.
+
+    n_epochs: int
+        The total number of epochs we want to train for.
+
+    Returns
+    -------
+    An array of number of epochs per sample, one for each 1-simplex.
+    """
+    norm_weights = weights / weights.sum()
+    batch_size = n_epochs / norm_weights.max() # take large enough batch size so highest weight edge is sampled every epoch
+    n_samples = (norm_weights * batch_size).astype(int) # number of epochs per sample
+    result = np.zeros_like(weights, dtype=np.float64)
+    result[n_samples > 0] = n_epochs / np.float64(n_samples[n_samples > 0])
+    result[n_samples == 0] = n_epochs
     return result
 
 

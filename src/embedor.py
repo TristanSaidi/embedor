@@ -15,7 +15,7 @@ class EmbedOR(object):
             verbose=False,
             fast=False,
             seed=10,
-            k_scale=2
+            k_scale=1
         ):
 
         """ 
@@ -139,10 +139,10 @@ class EmbedOR(object):
             self.apsp_euclidean = scipy.sparse.csgraph.shortest_path(self.A, unweighted=False, directed=False)
             assert np.allclose(self.apsp_euclidean, self.apsp_euclidean.T), "APSP matrix must be symmetric."
 
-    def _compute_affinities(self, max_energy_scale=10):
+    def _compute_affinities(self, max_energy_scale=5):
         # compute affinities
         def energy_to_affinity(energy):
-            affinity = np.exp(-0.5*energy**2)
+            affinity = np.exp(-energy**2)
             return affinity
         
         # compute affinities [without masking]
@@ -173,58 +173,34 @@ class EmbedOR(object):
         self.all_affinities = np.clip(self.all_affinities, 1e-5, 1)
         self.all_repulsions = 1 - self.all_affinities
         # set diagonal to 0, 1 respectively
-        np.fill_diagonal(self.all_affinities, 1)
+        np.fill_diagonal(self.all_affinities, 0)
         np.fill_diagonal(self.all_repulsions, 0)
-        # sanity checks
-        # assert np.allclose(self.all_affinities, self.all_affinities.T), "Affinity matrix must be symmetric."
-        # assert np.allclose(self.all_repulsions, self.all_repulsions.T), "Repulsion matrix must be symmetric."
 
     def _init_embedding(self):
         # spectral initialization
         self.spectral_init = nx.spectral_layout(self.G, weight="affinity", dim=self.dim, scale=1)
         self.spectral_init = np.array([self.spectral_init[node] for node in range(len(self.G.nodes()))])
         self.embedding = self.spectral_init.copy()
+        # scale the embedding to [-5, 5] x [-5, 5]
+        self.embedding = (self.embedding - np.min(self.embedding, axis=0)) / (
+            np.max(self.embedding, axis=0) - np.min(self.embedding, axis=0)
+        ) * 1 - 0.5
+        self.spectral_init = self.embedding.copy()
 
     def _layout(self, affinities, repulsions):
-        
-        # convert to array
-        from sklearn.utils import check_random_state
-        # We add a little noise to avoid local minima for optimization to come
-        self.embedding = noisy_scale_coords(
-            self.embedding, check_random_state(self.seed), max_coord=10, noise=0.0001
-        )
-
-        # OVERRIDE: get rid of this later
-        adj = self.A
-        # set all non-zero affinities to 1
-        affinities_mask = np.where(adj > 0, 1, 0)
-        affinities = np.exp(-0.5*affinities**2)
-        affinities = affinities * affinities_mask
-        repulsions = 1 - affinities
-        # OVERRIDE: get rid of this later
-
 
         n_epochs = 200
         # how many epochs to SKIP for each sample
         self.epochs_per_pair_positive = make_epochs_per_pair(affinities, n_epochs=n_epochs)
-        self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=n_epochs, max_iter=n_epochs//10)
-        print()
-        print(np.min(self.epochs_per_pair_positive), np.max(self.epochs_per_pair_positive))
-        print(np.min(self.epochs_per_pair_negative), np.max(self.epochs_per_pair_negative))
-        print()
-        self.embedding = (
-            10.0
-            * (self.embedding - np.min(self.embedding, 0))
-            / (np.max(self.embedding, 0) - np.min(self.embedding, 0))
-        ).astype(np.float32, order="C")
+        self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=n_epochs)
 
-        # number of pairs
-        # npairs = (self.X.shape[0]**2 - self.X.shape[0])/2
-        # Z = np.sum(affinities)/2
-        # self.gamma = ((npairs - Z) / Z) * (self.k / self.X.shape[0]**2)
-        # print(f"Computed gamma: {self.gamma}")
-        # self.gamma = 5 * np.sum(affinities)/np.sum(repulsions)
-        self.gamma = 1
+
+        # compute gamma
+        N = self.X.shape[0]
+        npairs = (N**2 -N)/2
+        Z = (np.sum(affinities) - np.trace(affinities))/2
+        self.gamma = (npairs - Z)/(Z * npairs)
+        print(f"Gamma: {self.gamma}")
 
         self.embedding = optimize_layout_euclidean(
             self.embedding, 
