@@ -176,6 +176,7 @@ def force_directed_layout(
 
 import numba
 from tqdm.auto import tqdm
+import cmath
 
 @numba.njit()
 def rdist(x, y):
@@ -197,6 +198,21 @@ def rdist(x, y):
         result += diff * diff
 
     return result
+
+@numba.njit()
+def log(x):
+    """Natural logarithm function.
+
+    Parameters
+    ----------
+    x: float
+        The value to be clamped.
+
+    Returns
+    -------
+    The natural logarithm of the input value.
+    """
+    return cmath.log(x).real
 
 @numba.njit()
 def clip(val):
@@ -230,7 +246,8 @@ def _optimize_layout_euclidean_single_epoch(
     epoch_of_next_negative_sample,
     n,
 ):
-    loss = 0.0
+    attractive_loss = 0.0
+    repulsive_loss = 0.0
     # iterate through each pairwise interaction in our graph
     for i in numba.prange(epochs_per_positive_sample.shape[0]):
         for j in numba.prange(i):
@@ -245,6 +262,11 @@ def _optimize_layout_euclidean_single_epoch(
 
                 dist_squared = rdist(current, other)
 
+                # compute the loss
+                f_ij = 1.0 / (1.0 + pow(dist_squared, 2.0))
+
+                attractive_loss += -log(f_ij)
+
                 if dist_squared > 0.0:
                     grad_coeff = -2.0 * 1.0 * 1.0 * pow(dist_squared, 1.0 - 1.0)
                     grad_coeff /= 1.0 * pow(dist_squared, 1.0) + 1.0
@@ -257,14 +279,19 @@ def _optimize_layout_euclidean_single_epoch(
                     other[d] += -grad_d * alpha
 
                 epoch_of_next_positive_sample[i][j] += epochs_per_positive_sample[i][j] # update sample i in [epochs_per_sample] epochs
-
+            
             if epoch_of_next_negative_sample[i][j] <= n:
 
                 current = embedding[i]
                 other = embedding[j]
 
                 dist_squared = rdist(current, other)
-                loss += (1-(1/(1+pow(dist_squared, 2.0))))
+
+                # compute the loss
+                f_ij = 1.0 / (1.0 + pow(dist_squared, 2.0))
+
+                repulsive_loss += -gamma * log(1+0.001-f_ij)
+
                 if dist_squared > 0.0:
                     grad_coeff = 2.0 * gamma * 1.0
                     grad_coeff /= (0.001 + dist_squared) * (
@@ -281,6 +308,8 @@ def _optimize_layout_euclidean_single_epoch(
                     current[d] += grad_d * alpha
                 
                 epoch_of_next_negative_sample[i][j] += epochs_per_negative_sample[i][j] # update sample i in [epochs_per_sample] epochs
+    
+    return attractive_loss, repulsive_loss
 
 _nb_optimize_layout_euclidean_single_epoch = numba.njit(
     _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=True
@@ -450,6 +479,7 @@ def optimize_layout_euclidean(
 
     epochs_list = None
     embedding_list = []
+    losses = []
     if isinstance(n_epochs, list):
         epochs_list = n_epochs
         n_epochs = max(epochs_list)
@@ -457,9 +487,9 @@ def optimize_layout_euclidean(
     if "disable" not in tqdm_kwds:
         tqdm_kwds["disable"] = not verbose
 
-    for n in tqdm(range(n_epochs), **tqdm_kwds):
+    for n in range(n_epochs):
         # n := epoch
-        optimize_fn(
+        attractive_loss, repulsive_loss = optimize_fn(
             embedding,
             epochs_per_positive_sample,
             epochs_per_negative_sample,
@@ -470,12 +500,16 @@ def optimize_layout_euclidean(
             epoch_of_next_negative_sample,
             n,
         )
-
+        # print(f"Epoch {n}: attractive_loss = {attractive_loss}, repulsive_loss = {repulsive_loss}")
+        print(
+            f"Epoch {n}: loss = {attractive_loss + repulsive_loss}"
+        )
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
         if epochs_list is not None and n in epochs_list:
             embedding_list.append(embedding.copy())
-
+        
+        losses.append(attractive_loss + repulsive_loss)
     # Add the last embedding to the list as well
     if epochs_list is not None:
         embedding_list.append(embedding.copy())
