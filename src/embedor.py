@@ -143,7 +143,7 @@ class EmbedOR(object):
         self.all_energies = self.apsp_energy.copy()
         from scipy.spatial.distance import squareform
         assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
-        self.all_affinities = squareform(joint_probabilities(self.apsp_energy, desired_perplexity=2*self.k, verbose=0))
+        self.all_affinities = squareform(joint_probabilities(self.apsp_energy, desired_perplexity=20*self.k, verbose=5))
         self.all_repulsions = 1 - self.all_affinities
 
     def _init_embedding(self):
@@ -159,15 +159,10 @@ class EmbedOR(object):
 
     def _layout(self, affinities, repulsions):
 
-        n_epochs = 500
+        n_epochs = 200
         # how many epochs to SKIP for each sample
         self.epochs_per_pair_positive = make_epochs_per_pair(affinities, n_epochs=n_epochs)
         self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=n_epochs)
-        # print min and max of epochs_per_pair
-        print(f"Min epochs per pair positive: {np.min(self.epochs_per_pair_positive)}")
-        print(f"Max epochs per pair positive: {np.max(self.epochs_per_pair_positive)}")
-        print(f"Min epochs per pair negative: {np.min(self.epochs_per_pair_negative)}")
-        print(f"Max epochs per pair negative: {np.max(self.epochs_per_pair_negative)}")
         # compute gamma
         N = self.X.shape[0]
         npairs = (N**2 -N)/2
@@ -181,7 +176,7 @@ class EmbedOR(object):
             epochs_per_positive_sample=self.epochs_per_pair_positive,
             epochs_per_negative_sample=self.epochs_per_pair_negative,
             gamma=self.gamma,
-            initial_alpha=0.25,
+            initial_alpha=0.1,
         )
 
     def plot_energies(self):
