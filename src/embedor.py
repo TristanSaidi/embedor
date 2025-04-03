@@ -15,7 +15,8 @@ class EmbedOR(object):
             verbose=False,
             fast=False,
             seed=10,
-            k_scale=1
+            k_scale=15,
+            metric='orc'
         ):
 
         """ 
@@ -33,14 +34,15 @@ class EmbedOR(object):
         self.alpha = self.exp_params.get('alpha', 3)
         self.weighted = self.exp_params.get('weighted', True)
         self.k_scale = k_scale
+        self.metric = metric
         self.exp_params = {
             'mode': 'nbrs',
             'n_neighbors': self.k,
             'alpha': self.alpha,
         }
-
         self.verbose = verbose
         self.fast = fast
+        assert not (self.fast and self.metric == 'euclidean'), "Fast mode is not compatible with euclidean metric."
         self.seed = seed
         self.X = None
 
@@ -143,8 +145,15 @@ class EmbedOR(object):
         self.all_energies = self.apsp_energy.copy()
         from scipy.spatial.distance import squareform
         assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
-        self.all_affinities = squareform(joint_probabilities(self.apsp_energy, desired_perplexity=20*self.k, verbose=5))
+        
+        if self.metric == "orc":
+            self.all_affinities = squareform(joint_probabilities(self.apsp_energy, desired_perplexity=self.k_scale*self.k, verbose=5))
+        else:
+            self.all_affinities = squareform(joint_probabilities(self.apsp_euclidean, desired_perplexity=self.k_scale*self.k, verbose=5))
         self.all_repulsions = 1 - self.all_affinities
+        # fill diagonal with 0
+        np.fill_diagonal(self.all_affinities, 0)
+        np.fill_diagonal(self.all_repulsions, 0)
 
     def _init_embedding(self):
         # spectral initialization
@@ -159,7 +168,7 @@ class EmbedOR(object):
 
     def _layout(self, affinities, repulsions):
 
-        n_epochs = 200
+        n_epochs = 300
         # how many epochs to SKIP for each sample
         self.epochs_per_pair_positive = make_epochs_per_pair(affinities, n_epochs=n_epochs)
         self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=n_epochs)
@@ -176,7 +185,8 @@ class EmbedOR(object):
             epochs_per_positive_sample=self.epochs_per_pair_positive,
             epochs_per_negative_sample=self.epochs_per_pair_negative,
             gamma=self.gamma,
-            initial_alpha=0.1,
+            initial_alpha=0.25,
+            verbose=self.verbose,
         )
 
     def plot_energies(self):
