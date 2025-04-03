@@ -500,10 +500,10 @@ def optimize_layout_euclidean(
             epoch_of_next_negative_sample,
             n,
         )
-        # print(f"Epoch {n}: attractive_loss = {attractive_loss}, repulsive_loss = {repulsive_loss}")
-        print(
-            f"Epoch {n}: loss = {attractive_loss + repulsive_loss}"
-        )
+        if verbose:
+            print(
+                f"Epoch {n}: loss = {attractive_loss + repulsive_loss}"
+            )
         alpha = initial_alpha * (1.0 - (float(n) / float(n_epochs)))
 
         if epochs_list is not None and n in epochs_list:
