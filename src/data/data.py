@@ -704,3 +704,107 @@ def get_mnist_data(n_samples, label=None):
         mnist_data = mnist_data[indices]
         mnist_labels = mnist_labels[indices]
     return mnist_data, mnist_labels
+
+
+def get_fmnist_data(n_samples, label=None):
+    """
+    Get n_samples Fashion MNIST data points with the specified label. If label is None, get n_samples random data points.
+    Parameters:
+
+    n_samples: int
+        Number of data points to get
+    label: int or None
+        Label of the data points to get. If None, get random data points.
+    Returns:
+    ----------
+    fmnist_data: np.ndarray
+        n_samples x 784 array of Fashion MNIST data points
+    fmnist_labels: np.ndarray
+        n_samples array of Fashion MNIST labels
+    """
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Lambda(lambda x: x.view(-1))
+    ])
+    fmnist = torchvision.datasets.FashionMNIST('/home/tristan/Research/Fa24/isorc/data', train=True, download=True, transform=transform)
+    fmnist_data = torch.stack([x for x, _ in fmnist]).numpy().astype(np.float64)
+    # scale so distances are in a reasonable range
+    fmnist_data /= 40
+    fmnist_labels = torch.tensor([y for _, y in fmnist]).numpy().astype(np.float64)
+    if label is not None:
+        label_indices = np.where(fmnist_labels == label)[0]
+        np.random.seed(0)
+        np.random.shuffle(label_indices)
+        label_indices = label_indices[:n_samples]
+        fmnist_data = fmnist_data[label_indices]
+        fmnist_labels = fmnist_labels[label_indices]
+    else:
+        np.random.seed(0)
+        indices = np.random.choice(fmnist_data.shape[0], n_samples, replace=False)
+        fmnist_data = fmnist_data[indices]
+        fmnist_labels = fmnist_labels[indices]
+    return fmnist_data, fmnist_labels
+
+
+# kmnist: path data/KMNIST/t10k-images-idx3-ubyte.gz
+def get_kmnist_data(n_samples, label=None):
+    """
+    Get n_samples KMNIST data points with the specified label. If label is None, get n_samples random data points.
+    Parameters:
+
+    n_samples: int
+        Number of data points to get
+    label: int or None
+        Label of the data points to get. If None, get random data points.
+    Returns:
+    ----------
+    kmnist_data: np.ndarray
+        n_samples x 784 array of KMNIST data points
+    kmnist_labels: np.ndarray
+        n_samples array of KMNIST labels
+    """
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Lambda(lambda x: x.view(-1))
+    ])
+    kmnist = torchvision.datasets.KMNIST('/home/tristan/Research/Fa24/isorc/data', train=True, download=True, transform=transform)
+    kmnist_data = torch.stack([x for x, _ in kmnist]).numpy().astype(np.float64)
+    # scale so distances are in a reasonable range
+    kmnist_data /= 40
+    kmnist_labels = torch.tensor([y for _, y in kmnist]).numpy().astype(np.float64)
+    if label is not None:
+        label_indices = np.where(kmnist_labels == label)[0]
+        np.random.seed(0)
+        np.random.shuffle(label_indices)
+        label_indices = label_indices[:n_samples]
+        kmnist_data = kmnist_data[label_indices]
+        kmnist_labels = kmnist_labels[label_indices]
+    else:
+        np.random.seed(0)
+        indices = np.random.choice(kmnist_data.shape[0], n_samples, replace=False)
+        kmnist_data = kmnist_data[indices]
+        kmnist_labels = kmnist_labels[indices]
+    return kmnist_data, kmnist_labels
+
+
+### from https://github.com/KrishnaswamyLab/PHATE?tab=readme-ov-file
+def gen_dla(
+    n_dim=100, n_branch=3, branch_length=1000, rand_multiplier=2, seed=37, sigma=4
+):
+    np.random.seed(seed)
+    M = np.cumsum(-1 + rand_multiplier * np.random.rand(branch_length, n_dim), 0)
+    for i in range(n_branch - 1):
+        ind = np.random.randint(branch_length)
+        new_branch = np.cumsum(
+            -1 + rand_multiplier * np.random.rand(branch_length, n_dim), 0
+        )
+        M = np.concatenate([M, new_branch + M[ind, :]])
+
+    noise = np.random.normal(0, sigma, M.shape)
+    M = M + noise
+
+    # returns the group labels for each point to make it easier to visualize
+    # embeddings
+    C = np.array([i // branch_length for i in range(n_branch * branch_length)])
+
+    return M, C
