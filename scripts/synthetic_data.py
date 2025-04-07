@@ -44,6 +44,14 @@ def synthetic_data(n_points):
     plt.savefig(os.path.join(circles_path, 'embedor.png'), dpi=1200)
     plt.close()
 
+    print("Running EmbedOR with isomap metric...")
+    embedor = EmbedOR(exp_params, metric='euclidean')
+    embedding = embedor.fit_transform(return_dict['data'])
+    plt.figure(figsize=(10, 10))
+    plot_data_2D(embedding, color=None, title=None, node_size=1.5)
+    plt.savefig(os.path.join(circles_path, 'embedor_isomap.png'), dpi=1200)
+    plt.close()
+
     print("Running UMAP...")
     umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean').fit_transform(return_dict['data'])
     plt.figure(figsize=(10, 10))
@@ -87,7 +95,6 @@ def synthetic_data(n_points):
     noise_thresh = None
     return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh, supersample=False)
 
-
     # apply a rotation by 45 degrees about the z-axis and a rotation by 45 degrees about the x-axis
     zrot = 0
     xrot = np.pi/32
@@ -114,6 +121,14 @@ def synthetic_data(n_points):
     plt.figure(figsize=(10, 10))
     plot_data_2D(embedding, color=None, title=None, node_size=1.5)
     plt.savefig(os.path.join(swiss_roll_path, 'embedor.png'), dpi=1200)
+    plt.close()
+
+    print("Running EmbedOR with isomap metric...")
+    embedor = EmbedOR(exp_params, metric='euclidean')
+    embedding = embedor.fit_transform(return_dict['data'])
+    plt.figure(figsize=(10, 10))
+    plot_data_2D(embedding, color=None, title=None, node_size=1.5)
+    plt.savefig(os.path.join(swiss_roll_path, 'embedor_isomap.png'), dpi=1200)
     plt.close()
 
     print("Running UMAP...")
@@ -172,6 +187,14 @@ def synthetic_data(n_points):
     plt.savefig(os.path.join(tori_path, 'embedor.png'), dpi=1200)
     plt.close()
 
+    print("Running EmbedOR with isomap metric...")
+    embedor = EmbedOR(exp_params, metric='euclidean')
+    embedding = embedor.fit_transform(return_dict['data'])
+    plt.figure(figsize=(10, 10))
+    plot_data_2D(embedding, color=None, title=None, node_size=1.5)
+    plt.savefig(os.path.join(tori_path, 'embedor_isomap.png'), dpi=1200)
+    plt.close()
+
     print("Running UMAP...")
     umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean').fit_transform(return_dict['data'])
     plt.figure(figsize=(10, 10))
@@ -218,6 +241,14 @@ def synthetic_data(n_points):
     plt.figure(figsize=(10, 10))
     plot_data_2D(embedding, color=None, title=None, node_size=1.5)
     plt.savefig(os.path.join(tree_path, 'embedor.png'), dpi=1200)
+    plt.close()
+
+    print("Running EmbedOR with isomap metric...")
+    embedor = EmbedOR(exp_params, metric='euclidean')
+    embedding = embedor.fit_transform(X)
+    plt.figure(figsize=(10, 10))
+    plot_data_2D(embedding, color=None, title=None, node_size=1.5)
+    plt.savefig(os.path.join(tree_path, 'embedor_isomap.png'), dpi=1200)
     plt.close()
 
     print("Running UMAP...")
