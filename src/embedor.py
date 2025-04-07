@@ -4,7 +4,7 @@ from src.utils.graph_utils import *
 from src.utils.embeddings import *
 import numpy as np
 from src.utils.layout import *
-from sklearn.manifold import TSNE
+from sklearn.manifold import TSNE, SpectralEmbedding
 
 
 class EmbedOR(object):
@@ -157,8 +157,14 @@ class EmbedOR(object):
 
     def _init_embedding(self):
         # spectral initialization
-        self.spectral_init = nx.spectral_layout(self.G, weight="affinity", dim=self.dim, scale=1)
-        self.spectral_init = np.array([self.spectral_init[node] for node in range(len(self.G.nodes()))])
+        # self.spectral_init = nx.spectral_layout(self.G, weight="affinity", dim=self.dim, scale=1)
+        self.A_affinity = nx.to_numpy_array(self.G, weight='affinity', nodelist=list(range(len(self.G.nodes()))))
+        self.spectral_init = SpectralEmbedding(
+            n_components=self.dim,
+            affinity='precomputed',
+            random_state=self.seed,
+        ).fit_transform(self.A_affinity)
+
         self.embedding = self.spectral_init.copy()
         # scale the embedding to [-0.5, 0.5] x [-0.5, 0.5]
         self.embedding = (self.embedding - np.min(self.embedding, axis=0)) / (
