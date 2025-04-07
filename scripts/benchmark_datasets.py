@@ -11,6 +11,8 @@ import numpy as np
 from sklearn.manifold import TSNE, Isomap, SpectralEmbedding
 import phate
 import json
+from src.utils import *
+
 
 sns.set_theme()
 # diffusion distance
@@ -18,29 +20,6 @@ sns.set_theme()
 exp_params = {
     'alpha': 3
 }
-
-def low_energy_edge_stats(embdng, full_graph, low_energy_graph, pctg=0.1):
-    # find average edge distance for original graph in embedding space
-    distances = np.zeros(len(full_graph.edges()))
-    for idx, (i, j) in enumerate(full_graph.edges()):
-        dist = np.linalg.norm(embdng[i] - embdng[j])
-        distances[idx] = dist
-    # find the average distance
-    avg_distance = np.mean(distances)
-    # find the std of the distances
-    std_distance = np.std(distances)
-
-    # now compute z-scores for each low energy edge
-    z_scores = np.zeros(len(low_energy_graph.edges()))
-    for idx, (i, j) in enumerate(low_energy_graph.edges()):
-        dist = np.linalg.norm(embdng[i] - embdng[j])
-        z_scores[idx] = (dist - avg_distance) / std_distance
-    z_scores_sorted = np.sort(z_scores)
-    # return mean and std of top 10% of z-scores
-    top_z_scores = z_scores_sorted[-int(len(z_scores) * pctg):]
-    mean_z_score = np.mean(top_z_scores)
-    std_z_score = np.std(top_z_scores)
-    return mean_z_score, std_z_score
 
 def benchmark_datasets(n_points):
     save_path = '/home/tristan/Research/Fa24/isorc/outputs/benchmark_datasets'
@@ -372,7 +351,26 @@ def benchmark_datasets(n_points):
     plot_graph_2D(embedding, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
     plt.savefig(os.path.join(embedor_path, 'variable_edge_widths.png'))
     plt.close()
-    
+
+    embedor_euc_path = os.path.join(fashion_mnist_path, 'embedor_euc')
+    os.makedirs(embedor_euc_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding_euc, embedor_euc.G, node_color=fashion_mnist_labels[embedor_euc.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(embedor_euc_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding_euc, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(embedor_euc_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding_euc, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(embedor_euc_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding_euc, embedor_euc.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(embedor_euc_path, 'variable_edge_widths.png'))
+    plt.close()    
+
     umap_path = os.path.join(fashion_mnist_path, 'umap')
     os.makedirs(umap_path, exist_ok=False)
     plt.figure(figsize=(10, 10))
@@ -480,7 +478,7 @@ def benchmark_datasets(n_points):
     embedding_euc = embedor_euc.fit_transform(kmnist_data)
     umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean').fit_transform(kmnist_data)
     tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300).fit_transform(kmnist_data)
-    # phate_emb = phate.PHATE(n_jobs=-2).fit_transform(kmnist_data)
+    phate_emb = phate.PHATE(n_jobs=-2).fit_transform(kmnist_data)
     spectral_emb = SpectralEmbedding(n_components=2, affinity='rbf').fit_transform(kmnist_data)
     iso_emb = Isomap(n_neighbors=15, n_components=2).fit_transform(kmnist_data)
 

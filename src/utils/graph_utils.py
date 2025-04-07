@@ -288,3 +288,27 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     assert G.is_directed() == False, "The graph is directed."
     assert len(G.nodes()) == n_points, "The graph has isolated nodes."
     return G, A
+
+
+def low_energy_edge_stats(embdng, full_graph, low_energy_graph, pctg=0.1):
+    # find average edge distance for original graph in embedding space
+    distances = np.zeros(len(full_graph.edges()))
+    for idx, (i, j) in enumerate(full_graph.edges()):
+        dist = np.linalg.norm(embdng[i] - embdng[j])
+        distances[idx] = dist
+    # find the average distance
+    avg_distance = np.mean(distances)
+    # find the std of the distances
+    std_distance = np.std(distances)
+
+    # now compute z-scores for each low energy edge
+    z_scores = np.zeros(len(low_energy_graph.edges()))
+    for idx, (i, j) in enumerate(low_energy_graph.edges()):
+        dist = np.linalg.norm(embdng[i] - embdng[j])
+        z_scores[idx] = (dist - avg_distance) / std_distance
+    z_scores_sorted = np.sort(z_scores)
+    # return mean and std of top 10% of z-scores
+    top_z_scores = z_scores_sorted[-int(len(z_scores) * pctg):]
+    mean_z_score = np.mean(top_z_scores)
+    std_z_score = np.std(top_z_scores)
+    return mean_z_score, std_z_score

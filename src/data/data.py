@@ -4,6 +4,8 @@ import numpy as np
 import torchvision
 import torch
 
+DATA_DIR = "/home/tristan/Research/Fa24/isorc/data/"
+
 # Data generation functions
 
 def concentric_circles(n_points, factor, noise, supersample=False, supersample_factor=2.5, noise_thresh=0.275, dim=2):
@@ -688,7 +690,7 @@ def get_mnist_data(n_samples, label=None):
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Lambda(lambda x: x.view(-1))
     ])
-    mnist = torchvision.datasets.MNIST('/home/tristan/Research/Fa24/isorc/data', train=True, download=True, transform=transform)
+    mnist = torchvision.datasets.MNIST(DATA_DIR, train=True, download=True, transform=transform)
     mnist_data = torch.stack([x for x, _ in mnist]).numpy().astype(np.float64)
     mnist_labels = torch.tensor([y for _, y in mnist]).numpy().astype(np.float64)
     if label is not None:
@@ -726,7 +728,7 @@ def get_fmnist_data(n_samples, label=None):
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Lambda(lambda x: x.view(-1))
     ])
-    fmnist = torchvision.datasets.FashionMNIST('/home/tristan/Research/Fa24/isorc/data', train=True, download=True, transform=transform)
+    fmnist = torchvision.datasets.FashionMNIST(DATA_DIR, train=True, download=True, transform=transform)
     fmnist_data = torch.stack([x for x, _ in fmnist]).numpy().astype(np.float64)
     # scale so distances are in a reasonable range
     fmnist_data /= 40
@@ -767,7 +769,7 @@ def get_kmnist_data(n_samples, label=None):
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Lambda(lambda x: x.view(-1))
     ])
-    kmnist = torchvision.datasets.KMNIST('/home/tristan/Research/Fa24/isorc/data', train=True, download=True, transform=transform)
+    kmnist = torchvision.datasets.KMNIST(DATA_DIR, train=True, download=True, transform=transform)
     kmnist_data = torch.stack([x for x, _ in kmnist]).numpy().astype(np.float64)
     # scale so distances are in a reasonable range
     kmnist_data /= 40
@@ -814,7 +816,7 @@ import scprep
 import os
 
 def get_embryoid_body_data(n_points=5000):
-    download_path = os.path.expanduser("/home/tristan/Research/Fa24/isorc/data/")
+    download_path = os.path.expanduser(DATA_DIR)
     sparse=True
     T1 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T0_1A"), sparse=sparse, gene_labels='both')
     T2 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T2_3B"), sparse=sparse, gene_labels='both')
@@ -859,3 +861,23 @@ def get_embryoid_body_data(n_points=5000):
     sample_labels_subsampled = np.array([label_to_int[label] for label in sample_labels_subsampled])
 
     return EBT_counts_subsampled, sample_labels_subsampled
+
+import wot
+import pandas as pd
+
+def get_developmental_data(n_points):
+    
+    # Path to input files
+    VAR_DS_PATH = DATA_DIR + 'developmental/ExprMatrix.var.genes.h5ad'
+    CELL_DAYS_PATH = DATA_DIR + 'developmental/cell_days.txt'
+
+    days_df = pd.read_csv(CELL_DAYS_PATH, index_col='id', sep='\t')
+
+    adata_var = wot.io.read_dataset(VAR_DS_PATH, obs=[days_df])
+    X = adata_var.X
+    days = adata_var.obs['day'].values
+    random_indices = np.random.choice(X.shape[0], n_points, replace=False)
+    X = X[random_indices, :]
+    days = days[random_indices]
+
+    return X, days
