@@ -808,3 +808,54 @@ def gen_dla(
     C = np.array([i // branch_length for i in range(n_branch * branch_length)])
 
     return M, C
+
+
+import scprep
+import os
+
+def embryoid_body(n_points=5000):
+    download_path = os.path.expanduser("/home/tristan/Research/Fa24/isorc/data/")
+    sparse=True
+    T1 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T0_1A"), sparse=sparse, gene_labels='both')
+    T2 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T2_3B"), sparse=sparse, gene_labels='both')
+    T3 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T4_5C"), sparse=sparse, gene_labels='both')
+    T4 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T6_7D"), sparse=sparse, gene_labels='both')
+    T5 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T8_9E"), sparse=sparse, gene_labels='both')
+    filtered_batches = []
+    for batch in [T1, T2, T3, T4, T5]:
+        batch = scprep.filter.filter_library_size(batch, percentile=20, keep_cells='above')
+        batch = scprep.filter.filter_library_size(batch, percentile=75, keep_cells='below')
+        filtered_batches.append(batch)
+    del T1, T2, T3, T4, T5 # removes objects from memory
+    EBT_counts, sample_labels = scprep.utils.combine_batches(
+        filtered_batches, 
+        ["Day 00-03", "Day 06-09", "Day 12-15", "Day 18-21", "Day 24-27"],
+        append_to_cell_names=True
+    )
+    del filtered_batches # removes objects from memory
+    EBT_counts = scprep.filter.filter_rare_genes(EBT_counts, min_cells=10)
+    EBT_counts = scprep.normalize.library_size_normalize(EBT_counts)
+    mito_genes = scprep.select.get_gene_set(EBT_counts, starts_with="MT-") # Get all mitochondrial genes. There are 14, FYI.
+
+    EBT_counts, sample_labels = scprep.filter.filter_gene_set_expression(
+        EBT_counts, sample_labels, genes=mito_genes, 
+        percentile=90, keep_cells='below')
+
+    EBT_counts = scprep.transform.sqrt(EBT_counts)
+
+    subsample_indices = np.random.choice(
+        EBT_counts.shape[0], 
+        size=n_points, 
+        replace=False
+    )
+    EBT_counts_subsampled = EBT_counts.iloc[subsample_indices, :]
+    sample_labels_subsampled = sample_labels.iloc[subsample_indices]
+    # numpy arrays
+    EBT_counts_subsampled = EBT_counts_subsampled.values
+    sample_labels_subsampled = sample_labels_subsampled.values
+    # convert from strings to ints by enumerating the unique labels
+    unique_labels = np.unique(sample_labels_subsampled)
+    label_to_int = {label: i for i, label in enumerate(unique_labels)}
+    sample_labels_subsampled = np.array([label_to_int[label] for label in sample_labels_subsampled])
+
+    return EBT_counts_subsampled, sample_labels_subsampled
