@@ -813,7 +813,7 @@ def gen_dla(
 import scprep
 import os
 
-def embryoid_body(n_points=5000):
+def get_embryoid_body_data(n_points=5000):
     download_path = os.path.expanduser("/home/tristan/Research/Fa24/isorc/data/")
     sparse=True
     T1 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T0_1A"), sparse=sparse, gene_labels='both')
