@@ -36,7 +36,7 @@ def plot_data_2D(X, color, title=None, node_size=10, axes=False, exp_name=None, 
         path = os.path.join(exp_dir, filename)
         plt.savefig(path)
 
-def plot_graph_2D(X, graph, title=None, node_color='#1f78b4', edge_color='lightgray', node_size=1, edge_width=1.0, colorbar=False, exp_name=None, filename=None):
+def plot_graph_2D(X, graph, title=None, node_color='#1f78b4', edge_color='lightgray', node_size=1, edge_width=1.0, colorbar=False, exp_name=None, filename=None, cmap=plt.cm.Spectral):
     """
     Plot the graph with the desired node or edge coloring.
     Parameters
@@ -64,7 +64,7 @@ def plot_graph_2D(X, graph, title=None, node_color='#1f78b4', edge_color='lightg
         # edge_vmin, edge_vmax = np.min(edge_color), np.max(edge_color)
     else:
         edge_vmin, edge_vmax = -1, 1
-    nx.draw(graph, X, node_color=node_color, edge_color=edge_color, node_size=node_size, cmap=plt.cm.Spectral, edge_cmap=edge_cmap, edge_vmin=edge_vmin, edge_vmax=edge_vmax, width=edge_width)
+    nx.draw(graph, X, node_color=node_color, edge_color=edge_color, node_size=node_size, cmap=cmap, edge_cmap=edge_cmap, edge_vmin=edge_vmin, edge_vmax=edge_vmax, width=edge_width)
     plt.title(title)
     plt.gca().set_aspect('equal')
     if colorbar:
