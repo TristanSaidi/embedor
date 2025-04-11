@@ -183,7 +183,7 @@ def moons(n_points, noise, supersample=False, supersample_factor=2.5, noise_thre
     }
     return return_dict
 
-def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5, noise_thresh=0.275, hole=False):
+def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5, noise_thresh=0.275, hole=False, double=False):
     """
     Generate a Swiss roll dataset.
     Parameters
@@ -209,6 +209,14 @@ def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5
         N_total = n_points
         subsample_indices = None
     swiss_roll, t, y = make_swiss_roll(N_total, hole=hole)
+    cluster = None
+    if double:
+        swiss_roll2, _, _ = make_swiss_roll(N_total, hole=hole)
+        # scale slightly
+        swiss_roll2 = swiss_roll2 * 0.75
+        swiss_roll = np.concatenate([swiss_roll, swiss_roll2], axis=0)
+        cluster = np.zeros(swiss_roll.shape[0])
+        cluster[swiss_roll.shape[0]//2:] = 1
     color = t
     # scale t to match that of the embedded manifold
     t = t * (89.37) / (3 * np.pi)
@@ -238,7 +246,7 @@ def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5
 
     return_dict = {
         'data': swiss_roll,
-        'cluster': None,
+        'cluster': cluster,
         'color': color,
         'geodesic_distances': distances,
         'data_supersample': swiss_roll_supersample,
