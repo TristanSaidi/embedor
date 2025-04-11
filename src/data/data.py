@@ -4,6 +4,8 @@ import numpy as np
 import torchvision
 import torch
 
+DATA_DIR = "/home/tristan/Research/Fa24/isorc/data/"
+
 # Data generation functions
 
 def concentric_circles(n_points, factor, noise, supersample=False, supersample_factor=2.5, noise_thresh=0.275, dim=2):
@@ -181,7 +183,7 @@ def moons(n_points, noise, supersample=False, supersample_factor=2.5, noise_thre
     }
     return return_dict
 
-def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5, noise_thresh=0.275, hole=False):
+def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5, noise_thresh=0.275, hole=False, double=False):
     """
     Generate a Swiss roll dataset.
     Parameters
@@ -207,6 +209,14 @@ def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5
         N_total = n_points
         subsample_indices = None
     swiss_roll, t, y = make_swiss_roll(N_total, hole=hole)
+    cluster = None
+    if double:
+        swiss_roll2, _, _ = make_swiss_roll(N_total, hole=hole)
+        # scale slightly
+        swiss_roll2 = swiss_roll2 * 0.75
+        swiss_roll = np.concatenate([swiss_roll, swiss_roll2], axis=0)
+        cluster = np.zeros(swiss_roll.shape[0])
+        cluster[swiss_roll.shape[0]//2:] = 1
     color = t
     # scale t to match that of the embedded manifold
     t = t * (89.37) / (3 * np.pi)
@@ -236,7 +246,7 @@ def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5
 
     return_dict = {
         'data': swiss_roll,
-        'cluster': None,
+        'cluster': cluster,
         'color': color,
         'geodesic_distances': distances,
         'data_supersample': swiss_roll_supersample,
@@ -688,7 +698,7 @@ def get_mnist_data(n_samples, label=None):
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Lambda(lambda x: x.view(-1))
     ])
-    mnist = torchvision.datasets.MNIST('/home/tristan/Research/Fa24/isorc/data', train=True, download=True, transform=transform)
+    mnist = torchvision.datasets.MNIST(DATA_DIR, train=True, download=True, transform=transform)
     mnist_data = torch.stack([x for x, _ in mnist]).numpy().astype(np.float64)
     mnist_labels = torch.tensor([y for _, y in mnist]).numpy().astype(np.float64)
     if label is not None:
@@ -704,3 +714,178 @@ def get_mnist_data(n_samples, label=None):
         mnist_data = mnist_data[indices]
         mnist_labels = mnist_labels[indices]
     return mnist_data, mnist_labels
+
+
+def get_fmnist_data(n_samples, label=None):
+    """
+    Get n_samples Fashion MNIST data points with the specified label. If label is None, get n_samples random data points.
+    Parameters:
+
+    n_samples: int
+        Number of data points to get
+    label: int or None
+        Label of the data points to get. If None, get random data points.
+    Returns:
+    ----------
+    fmnist_data: np.ndarray
+        n_samples x 784 array of Fashion MNIST data points
+    fmnist_labels: np.ndarray
+        n_samples array of Fashion MNIST labels
+    """
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Lambda(lambda x: x.view(-1))
+    ])
+    fmnist = torchvision.datasets.FashionMNIST(DATA_DIR, train=True, download=True, transform=transform)
+    fmnist_data = torch.stack([x for x, _ in fmnist]).numpy().astype(np.float64)
+    # scale so distances are in a reasonable range
+    fmnist_data /= 40
+    fmnist_labels = torch.tensor([y for _, y in fmnist]).numpy().astype(np.float64)
+    if label is not None:
+        label_indices = np.where(fmnist_labels == label)[0]
+        np.random.seed(0)
+        np.random.shuffle(label_indices)
+        label_indices = label_indices[:n_samples]
+        fmnist_data = fmnist_data[label_indices]
+        fmnist_labels = fmnist_labels[label_indices]
+    else:
+        np.random.seed(0)
+        indices = np.random.choice(fmnist_data.shape[0], n_samples, replace=False)
+        fmnist_data = fmnist_data[indices]
+        fmnist_labels = fmnist_labels[indices]
+    return fmnist_data, fmnist_labels
+
+
+# kmnist: path data/KMNIST/t10k-images-idx3-ubyte.gz
+def get_kmnist_data(n_samples, label=None):
+    """
+    Get n_samples KMNIST data points with the specified label. If label is None, get n_samples random data points.
+    Parameters:
+
+    n_samples: int
+        Number of data points to get
+    label: int or None
+        Label of the data points to get. If None, get random data points.
+    Returns:
+    ----------
+    kmnist_data: np.ndarray
+        n_samples x 784 array of KMNIST data points
+    kmnist_labels: np.ndarray
+        n_samples array of KMNIST labels
+    """
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Lambda(lambda x: x.view(-1))
+    ])
+    kmnist = torchvision.datasets.KMNIST(DATA_DIR, train=True, download=True, transform=transform)
+    kmnist_data = torch.stack([x for x, _ in kmnist]).numpy().astype(np.float64)
+    # scale so distances are in a reasonable range
+    kmnist_data /= 40
+    kmnist_labels = torch.tensor([y for _, y in kmnist]).numpy().astype(np.float64)
+    if label is not None:
+        label_indices = np.where(kmnist_labels == label)[0]
+        np.random.seed(0)
+        np.random.shuffle(label_indices)
+        label_indices = label_indices[:n_samples]
+        kmnist_data = kmnist_data[label_indices]
+        kmnist_labels = kmnist_labels[label_indices]
+    else:
+        np.random.seed(0)
+        indices = np.random.choice(kmnist_data.shape[0], n_samples, replace=False)
+        kmnist_data = kmnist_data[indices]
+        kmnist_labels = kmnist_labels[indices]
+    return kmnist_data, kmnist_labels
+
+
+### from https://github.com/KrishnaswamyLab/PHATE?tab=readme-ov-file
+def gen_dla(
+    n_dim=100, n_branch=3, branch_length=1000, rand_multiplier=2, seed=37, sigma=4
+):
+    np.random.seed(seed)
+    M = np.cumsum(-1 + rand_multiplier * np.random.rand(branch_length, n_dim), 0)
+    for i in range(n_branch - 1):
+        ind = np.random.randint(branch_length)
+        new_branch = np.cumsum(
+            -1 + rand_multiplier * np.random.rand(branch_length, n_dim), 0
+        )
+        M = np.concatenate([M, new_branch + M[ind, :]])
+
+    noise = np.random.normal(0, sigma, M.shape)
+    M = M + noise
+
+    # returns the group labels for each point to make it easier to visualize
+    # embeddings
+    C = np.array([i // branch_length for i in range(n_branch * branch_length)])
+
+    return M, C
+
+
+import scprep
+import os
+
+def get_embryoid_body_data(n_points=5000):
+    download_path = os.path.expanduser(DATA_DIR)
+    sparse=True
+    T1 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T0_1A"), sparse=sparse, gene_labels='both')
+    T2 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T2_3B"), sparse=sparse, gene_labels='both')
+    T3 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T4_5C"), sparse=sparse, gene_labels='both')
+    T4 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T6_7D"), sparse=sparse, gene_labels='both')
+    T5 = scprep.io.load_10X(os.path.join(download_path, "scRNAseq", "T8_9E"), sparse=sparse, gene_labels='both')
+    filtered_batches = []
+    for batch in [T1, T2, T3, T4, T5]:
+        batch = scprep.filter.filter_library_size(batch, percentile=20, keep_cells='above')
+        batch = scprep.filter.filter_library_size(batch, percentile=75, keep_cells='below')
+        filtered_batches.append(batch)
+    del T1, T2, T3, T4, T5 # removes objects from memory
+    EBT_counts, sample_labels = scprep.utils.combine_batches(
+        filtered_batches, 
+        ["Day 00-03", "Day 06-09", "Day 12-15", "Day 18-21", "Day 24-27"],
+        append_to_cell_names=True
+    )
+    del filtered_batches # removes objects from memory
+    EBT_counts = scprep.filter.filter_rare_genes(EBT_counts, min_cells=10)
+    EBT_counts = scprep.normalize.library_size_normalize(EBT_counts)
+    mito_genes = scprep.select.get_gene_set(EBT_counts, starts_with="MT-") # Get all mitochondrial genes. There are 14, FYI.
+
+    EBT_counts, sample_labels = scprep.filter.filter_gene_set_expression(
+        EBT_counts, sample_labels, genes=mito_genes, 
+        percentile=90, keep_cells='below')
+
+    EBT_counts = scprep.transform.sqrt(EBT_counts)
+
+    subsample_indices = np.random.choice(
+        EBT_counts.shape[0], 
+        size=n_points, 
+        replace=False
+    )
+    EBT_counts_subsampled = EBT_counts.iloc[subsample_indices, :]
+    sample_labels_subsampled = sample_labels.iloc[subsample_indices]
+    # numpy arrays
+    EBT_counts_subsampled = EBT_counts_subsampled.values
+    sample_labels_subsampled = sample_labels_subsampled.values
+    # convert from strings to ints by enumerating the unique labels
+    unique_labels = np.unique(sample_labels_subsampled)
+    label_to_int = {label: i for i, label in enumerate(unique_labels)}
+    sample_labels_subsampled = np.array([label_to_int[label] for label in sample_labels_subsampled])
+
+    return EBT_counts_subsampled, sample_labels_subsampled
+
+import wot
+import pandas as pd
+
+def get_developmental_data(n_points):
+    
+    # Path to input files
+    VAR_DS_PATH = DATA_DIR + 'developmental/ExprMatrix.var.genes.h5ad'
+    CELL_DAYS_PATH = DATA_DIR + 'developmental/cell_days.txt'
+
+    days_df = pd.read_csv(CELL_DAYS_PATH, index_col='id', sep='\t')
+
+    adata_var = wot.io.read_dataset(VAR_DS_PATH, obs=[days_df])
+    X = adata_var.X
+    days = adata_var.obs['day'].values
+    random_indices = np.random.choice(X.shape[0], n_points, replace=False)
+    X = X[random_indices, :]
+    days = days[random_indices]
+
+    return X, days
