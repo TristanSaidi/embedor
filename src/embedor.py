@@ -1,11 +1,12 @@
-from src.data.data import *
-from src.plotting import *
+# check if matplotlib is already imported
+import matplotlib.pyplot as plt
+# # from src.data.data import *
 from src.utils.graph_utils import *
-from src.utils.embeddings import *
+# # from src.utils.embeddings import *
 import numpy as np
 from src.utils.layout import *
-from sklearn.manifold import TSNE, SpectralEmbedding
-
+from sklearn.manifold import SpectralEmbedding
+import scipy
 
 class EmbedOR(object):
     def __init__(
@@ -54,20 +55,6 @@ class EmbedOR(object):
             affinities=self.all_affinities,
             repulsions=self.all_repulsions
         )
-        return self.embedding
-
-    def fit_transform_tsne(self, X=None, init="random"):
-        self.fit(X)
-        self._init_embedding()
-        self.tsne = TSNE(
-            n_components=self.dim,
-            random_state=self.seed,
-            verbose=self.verbose,
-            n_iter=300,
-            metric='precomputed',
-            init=self.embedding if init != "random" else "random",
-        )
-        self.embedding = self.tsne.fit_transform(self.all_energies)
         return self.embedding
 
     def fit(self, X=None):
