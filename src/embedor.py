@@ -14,7 +14,6 @@ class EmbedOR(object):
             exp_params = {}, 
             dim=2,
             verbose=False,
-            fast=False,
             seed=10,
             k_scale=15,
             metric='orc'
@@ -33,6 +32,7 @@ class EmbedOR(object):
         self.exp_params = exp_params
         self.k = self.exp_params.get('n_neighbors', 15)
         self.p = self.exp_params.get('p', 3)
+        self.epochs = self.exp_params.get('epochs', 300)
         self.weighted = self.exp_params.get('weighted', True)
         self.k_scale = k_scale
         self.metric = metric
@@ -42,8 +42,6 @@ class EmbedOR(object):
             'p': self.p,
         }
         self.verbose = verbose
-        self.fast = fast
-        assert not (self.fast and self.metric == 'euclidean'), "Fast mode is not compatible with euclidean metric."
         self.seed = seed
         self.X = None
 
@@ -61,21 +59,23 @@ class EmbedOR(object):
         self.X = X
         print("Building nearest neighbor graph...")
         self._build_nnG() # self.G, self.orcs, self.A are now available
-        print("Computing energies...")
-        self._compute_energies()
+        print("Computing distances...")
+        self._compute_distances()
+        print("Computing affinities...")
         self._compute_affinities()
+        print("Updating the graph attributes ...")
         self._update_G() # add edge attribute 'affinity'
 
 
     def _update_G(self):
         self.affinities = []
-        self.energies = []
+        self.distances = []
         for i, (u,v) in enumerate(self.G.edges):
             idx_u = u
             idx_v = v
             self.G[u][v]['affinity'] = self.all_affinities[idx_u, idx_v]
             self.affinities.append(self.all_affinities[idx_u, idx_v])
-            self.energies.append(self.all_energies[idx_u, idx_v])
+            self.distances.append(self.apsp[idx_u, idx_v])
 
     def _build_nnG(self):
         """
@@ -97,46 +97,41 @@ class EmbedOR(object):
         self.edge_mask = np.where(self.A > 0, 1, 0)
 
 
-    def _compute_energies(self, max_val=np.inf):
+    def _compute_distances(self, max_val=np.inf):
         # compute energy for each edge
-        energies = []
-        max_energy = 0        
-        for u, v in self.G.edges():
-            orc = self.G[u][v]['ricciCurvature']
+        if self.metric == "orc":
+            energies = []
+            max_energy = 0        
+            for u, v in self.G.edges():
+                orc = self.G[u][v]['ricciCurvature']
+                
+                c = 1/(np.log(3) - np.log(2))
+                energy = (-c*np.log(orc + 2) + c*np.log(2) + 1) ** self.p + 1 # energy(+1) = 0, energy(-2) = infty,
+                max_energy = max(energy, max_energy)
+                energy = np.clip(energy, 0, max_val) # clip energy to max
+                if self.weighted:
+                    energy = energy * self.G[u][v]['weight'] # scale energy by weight
+                self.G[u][v]['energy'] = energy
+                energies.append(energy)
             
-            c = 1/(np.log(3) - np.log(2))
-            energy = (-c*np.log(orc + 2) + c*np.log(2) + 1) ** self.p + 1 # energy(+1) = 0, energy(-2) = infty,
-            max_energy = max(energy, max_energy)
-            energy = np.clip(energy, 0, max_val) # clip energy to max
-            if self.weighted:
-                energy = energy * self.G[u][v]['weight'] # scale energy by weight
-            self.G[u][v]['energy'] = energy
-            energies.append(energy)
-        
-        print(f"Max energy (unclipped): {max_energy}")
-        self.A_energy = nx.to_numpy_array(self.G, weight='energy', nodelist=list(range(len(self.G.nodes()))))
-        assert np.allclose(self.A_energy, self.A_energy.T), "Energy matrix must be symmetric."
-        
-        assert np.all(np.where(self.A_energy > 0, 1, 0) == self.edge_mask), "invalid entries"
-        assert np.all(self.A_energy >= 0), "invalid entries"
+            self.A_energy = nx.to_numpy_array(self.G, weight='energy', nodelist=list(range(len(self.G.nodes()))))
+            assert np.allclose(self.A_energy, self.A_energy.T), "Energy matrix must be symmetric."
+            
+            assert np.all(np.where(self.A_energy > 0, 1, 0) == self.edge_mask), "invalid entries"
+            assert np.all(self.A_energy >= 0), "invalid entries"
 
-        self.apsp_energy = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
-        assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
-        max_val = np.max(self.apsp_energy)
-        # print(f"Max APSP energy: {np.max(self.apsp_energy)}")
-        if not self.fast:
-            self.apsp_euclidean = scipy.sparse.csgraph.shortest_path(self.A, unweighted=False, directed=False)
-            assert np.allclose(self.apsp_euclidean, self.apsp_euclidean.T), "APSP matrix must be symmetric."
+            self.apsp = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
+        
+        elif self.metric == "euclidean":
+            self.apsp = scipy.sparse.csgraph.shortest_path(self.A, unweighted=False, directed=False)
+            
+        assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symmetric."
 
     def _compute_affinities(self):
-        self.all_energies = self.apsp_energy.copy()
-        from scipy.spatial.distance import squareform
-        assert np.allclose(self.apsp_energy, self.apsp_energy.T), "APSP matrix must be symmetric."
-        
-        if self.metric == "orc":
-            self.all_affinities = squareform(joint_probabilities(self.apsp_energy, desired_perplexity=self.k_scale*self.k, verbose=5))
-        else:
-            self.all_affinities = squareform(joint_probabilities(self.apsp_euclidean, desired_perplexity=self.k_scale*self.k, verbose=5))
+        from scipy.spatial.distance import squareform        
+        self.all_affinities = squareform(joint_probabilities(self.apsp, desired_perplexity=self.k_scale*self.k, verbose=0))
+        # symmetrize affinities
+        self.all_affinities = (self.all_affinities + self.all_affinities.T) / 2
         self.all_repulsions = 1 - self.all_affinities
         # fill diagonal with 0
         np.fill_diagonal(self.all_affinities, 0)
@@ -144,7 +139,6 @@ class EmbedOR(object):
 
     def _init_embedding(self):
         # spectral initialization
-        # self.spectral_init = nx.spectral_layout(self.G, weight="affinity", dim=self.dim, scale=1)
         self.A_affinity = nx.to_numpy_array(self.G, weight='affinity', nodelist=list(range(len(self.G.nodes()))))
         self.spectral_init = SpectralEmbedding(
             n_components=self.dim,
@@ -161,20 +155,19 @@ class EmbedOR(object):
 
     def _layout(self, affinities, repulsions):
 
-        n_epochs = 300
         # how many epochs to SKIP for each sample
-        self.epochs_per_pair_positive = make_epochs_per_pair(affinities, n_epochs=n_epochs)
-        self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=n_epochs)
+        self.epochs_per_pair_positive = make_epochs_per_pair(affinities, n_epochs=self.epochs)
+        self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=self.epochs)
         # compute gamma
         N = self.X.shape[0]
         npairs = (N**2 -N)/2
         Z = (np.sum(affinities) - np.trace(affinities))/2
+        # self.gamma = (npairs - Z)/(Z*npairs*50)
         self.gamma = (npairs - Z)/(Z*npairs*50)
-        print(f"Gamma: {self.gamma}")
 
         self.embedding = optimize_layout_euclidean(
             self.embedding, 
-            n_epochs=n_epochs,
+            n_epochs=self.epochs,
             epochs_per_positive_sample=self.epochs_per_pair_positive,
             epochs_per_negative_sample=self.epochs_per_pair_negative,
             gamma=self.gamma,
