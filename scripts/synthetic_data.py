@@ -15,7 +15,7 @@ sns.set_theme()
 # diffusion distance
 
 exp_params = {
-    'alpha': 3
+    'p': 3
 }
 
 def synthetic_data(n_points):

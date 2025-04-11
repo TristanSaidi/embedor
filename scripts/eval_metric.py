@@ -75,7 +75,7 @@ def spectral_clustering(affinities):
     return labels
 
 exp_params = {
-    'alpha': 5
+    'p': 5
 }
 
 def metric_eval(n_points):

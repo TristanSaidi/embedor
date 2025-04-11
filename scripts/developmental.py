@@ -17,7 +17,7 @@ sns.set_theme()
 # diffusion distance
 
 exp_params = {
-    'alpha': 3
+    'p': 3
 }
 
 def low_energy_edge_stats(embdng, full_graph, low_energy_graph, pctg=0.1):

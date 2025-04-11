@@ -32,14 +32,14 @@ class EmbedOR(object):
         self.dim = dim
         self.exp_params = exp_params
         self.k = self.exp_params.get('n_neighbors', 15)
-        self.alpha = self.exp_params.get('alpha', 3)
+        self.p = self.exp_params.get('p', 3)
         self.weighted = self.exp_params.get('weighted', True)
         self.k_scale = k_scale
         self.metric = metric
         self.exp_params = {
             'mode': 'nbrs',
             'n_neighbors': self.k,
-            'alpha': self.alpha,
+            'p': self.p,
         }
         self.verbose = verbose
         self.fast = fast
@@ -105,7 +105,7 @@ class EmbedOR(object):
             orc = self.G[u][v]['ricciCurvature']
             
             c = 1/(np.log(3) - np.log(2))
-            energy = (-c*np.log(orc + 2) + c*np.log(2) + 1) ** self.alpha + 1 # energy(+1) = 0, energy(-2) = infty,
+            energy = (-c*np.log(orc + 2) + c*np.log(2) + 1) ** self.p + 1 # energy(+1) = 0, energy(-2) = infty,
             max_energy = max(energy, max_energy)
             energy = np.clip(energy, 0, max_val) # clip energy to max
             if self.weighted:

@@ -17,7 +17,7 @@ sns.set_theme()
 # diffusion distance
 
 exp_params = {
-    'alpha': 3
+    'p': 3
 }
 
 def embryoid_body(n_points):
