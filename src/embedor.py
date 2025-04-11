@@ -15,7 +15,6 @@ class EmbedOR(object):
             dim=2,
             verbose=False,
             seed=10,
-            k_scale=15,
             metric='orc'
         ):
 
@@ -34,7 +33,7 @@ class EmbedOR(object):
         self.p = self.exp_params.get('p', 3)
         self.epochs = self.exp_params.get('epochs', 300)
         self.weighted = self.exp_params.get('weighted', True)
-        self.k_scale = k_scale
+        self.perplexity = self.exp_params.get('perplexity', 150)
         self.metric = metric
         self.exp_params = {
             'mode': 'nbrs',
@@ -44,9 +43,11 @@ class EmbedOR(object):
         self.verbose = verbose
         self.seed = seed
         self.X = None
+        self.fitted = False
 
     def fit_transform(self, X=None):
-        self.fit(X)
+        if not self.fitted:
+            self.fit(X)
         self._init_embedding()
         print("Running Stochastic Neighbor Embedding...")
         self._layout(
@@ -63,8 +64,9 @@ class EmbedOR(object):
         self._compute_distances()
         print("Computing affinities...")
         self._compute_affinities()
-        print("Updating the graph attributes ...")
+        print("Updating the graph attributes...")
         self._update_G() # add edge attribute 'affinity'
+        self.fitted = True
 
 
     def _update_G(self):
@@ -110,10 +112,10 @@ class EmbedOR(object):
                 max_energy = max(energy, max_energy)
                 energy = np.clip(energy, 0, max_val) # clip energy to max
                 if self.weighted:
-                    energy = energy * self.G[u][v]['weight'] # scale energy by weight
+                    energy = energy * self.G[u][v]['weight'] # scale energy by weight (i.e. Euclidean distance)
                 self.G[u][v]['energy'] = energy
                 energies.append(energy)
-            
+
             self.A_energy = nx.to_numpy_array(self.G, weight='energy', nodelist=list(range(len(self.G.nodes()))))
             assert np.allclose(self.A_energy, self.A_energy.T), "Energy matrix must be symmetric."
             
@@ -127,9 +129,18 @@ class EmbedOR(object):
             
         assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symmetric."
 
-    def _compute_affinities(self):
-        from scipy.spatial.distance import squareform        
-        self.all_affinities = squareform(joint_probabilities(self.apsp, desired_perplexity=self.k_scale*self.k, verbose=0))
+    def _compute_affinities(self, perplexity=True):
+        from scipy.spatial.distance import squareform     
+        if perplexity:
+            self.all_affinities = squareform(joint_probabilities(self.apsp, desired_perplexity=self.perplexity, verbose=0))
+        else:
+            # normalize so kth nearest neighbor has distance 1
+            self.knn_indices = np.argsort(self.apsp, axis=1)[:, self.k * self.k_scale]
+            self.knn_distances = np.take_along_axis(self.apsp, self.knn_indices[:, None], axis=1)
+
+            self.apsp_norm = self.apsp / self.knn_distances
+            self.all_affinities = np.exp(-self.apsp_norm**2/2)
+
         # symmetrize affinities
         self.all_affinities = (self.all_affinities + self.all_affinities.T) / 2
         self.all_repulsions = 1 - self.all_affinities
@@ -162,9 +173,7 @@ class EmbedOR(object):
         N = self.X.shape[0]
         npairs = (N**2 -N)/2
         Z = (np.sum(affinities) - np.trace(affinities))/2
-        # self.gamma = (npairs - Z)/(Z*npairs*50)
-        self.gamma = (npairs - Z)/(Z*npairs*50)
-
+        self.gamma = (npairs - Z)/(Z*npairs)
         self.embedding = optimize_layout_euclidean(
             self.embedding, 
             n_epochs=self.epochs,
@@ -172,12 +181,12 @@ class EmbedOR(object):
             epochs_per_negative_sample=self.epochs_per_pair_negative,
             gamma=self.gamma,
             initial_alpha=0.25,
-            verbose=self.verbose,
+            verbose=False,
         )
 
-    def plot_energies(self):
+    def plot_distances(self):
         plt.figure()
-        plt.hist(self.energies, bins=100)
+        plt.hist(self.distances, bins=100)
         plt.title("Energy Distribution")
         plt.xlabel("Energy")
         plt.ylabel("Count")
@@ -198,9 +207,9 @@ class EmbedOR(object):
         plt.scatter(emb[:, 0], emb[:, 1], c='b', s=10)
         plt.legend(["Spectral Init", "Final Embedding"])
 
-    def plot_apsp_energy(self):
+    def plot_apsp(self):
         plt.figure()
-        plt.hist(self.apsp_energy.flatten(), bins=100)
+        plt.hist(self.apsp.flatten(), bins=100)
         plt.title("APSP Energy Distribution")
         plt.xlabel("APSP Energy")
         plt.ylabel("Count")

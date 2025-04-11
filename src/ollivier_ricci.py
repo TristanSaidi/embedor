@@ -390,7 +390,6 @@ def _compute_ricci_curvature_edges(G: nx.Graph, weight="weight", edge_list=[],
 
     logger.trace("Number of nodes: %d" % G.number_of_nodes())
     logger.trace("Number of edges: %d" % G.number_of_edges())
-
     if not nx.get_edge_attributes(G, weight):
         logger.info('Edge weight not detected in graph, use "weight" as default edge weight.')
         for (v1, v2) in G.edges():
