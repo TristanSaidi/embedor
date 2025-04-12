@@ -129,17 +129,9 @@ class EmbedOR(object):
             
         assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symmetric."
 
-    def _compute_affinities(self, perplexity=True):
+    def _compute_affinities(self):
         from scipy.spatial.distance import squareform     
-        if perplexity:
-            self.all_affinities = squareform(joint_probabilities(self.apsp, desired_perplexity=self.perplexity, verbose=0))
-        else:
-            # normalize so kth nearest neighbor has distance 1
-            self.knn_indices = np.argsort(self.apsp, axis=1)[:, self.k * self.k_scale]
-            self.knn_distances = np.take_along_axis(self.apsp, self.knn_indices[:, None], axis=1)
-
-            self.apsp_norm = self.apsp / self.knn_distances
-            self.all_affinities = np.exp(-self.apsp_norm**2/2)
+        self.all_affinities = squareform(joint_probabilities(self.apsp, desired_perplexity=self.perplexity, verbose=0))
 
         # symmetrize affinities
         self.all_affinities = (self.all_affinities + self.all_affinities.T) / 2
@@ -173,7 +165,7 @@ class EmbedOR(object):
         N = self.X.shape[0]
         npairs = (N**2 -N)/2
         Z = (np.sum(affinities) - np.trace(affinities))/2
-        self.gamma = (npairs - Z)/(Z*npairs)
+        self.gamma = (npairs - Z)/(Z*N**2)
         self.embedding = optimize_layout_euclidean(
             self.embedding, 
             n_epochs=self.epochs,
