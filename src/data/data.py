@@ -3,8 +3,10 @@ from src.data.manifold import *
 import numpy as np
 import torchvision
 import torch
+import os
 
-DATA_DIR = "/burg/iicd/users/tls2160/research/Fa24/isorc/data/"
+ROOT_DIR = os.getenv("PYTHONPATH")
+DATA_DIR = os.path.join(ROOT_DIR, "data")
 
 # Data generation functions
 

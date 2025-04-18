@@ -12,17 +12,18 @@ from sklearn.manifold import TSNE, Isomap, SpectralEmbedding
 import phate
 import json
 from src.utils import *
+import os
+
+REPO_ROOT = os.getenv('PYTHONPATH')
 
 sns.set_theme()
-# diffusion distance
 
 exp_params = {
     'p': 3
 }
 
-
 def developmental(n_points):
-    save_path = '/burg/iicd/users/tls2160/research/Fa24/isorc/outputs/macosko'
+    save_path = f'{REPO_ROOT}/outputs/macosko'
     os.makedirs(save_path, exist_ok=True)
 
     from datetime import datetime

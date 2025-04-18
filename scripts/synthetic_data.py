@@ -10,16 +10,18 @@ import umap
 import numpy as np
 from sklearn.manifold import TSNE, Isomap, SpectralEmbedding
 import phate
+import os
+
+REPO_ROOT = os.getenv('PYTHONPATH')
 
 sns.set_theme()
-# diffusion distance
 
 exp_params = {
     'p': 3
 }
 
 def synthetic_data(n_points):
-    save_path = '/home/tristan/Research/Fa24/isorc/outputs/synthetic_data'
+    save_path = f'{REPO_ROOT}/outputs/synthetic_data'
     os.makedirs(save_path, exist_ok=True)
     
     from datetime import datetime
