@@ -3,7 +3,6 @@ import numpy as np
 from sklearn import neighbors
 from src.ollivier_ricci import OllivierRicci
 import pynndescent
-import tqdm
 
 
 def compute_orc(G, nbrhood_size=1):
