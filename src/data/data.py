@@ -890,21 +890,6 @@ def get_developmental_data(n_points):
 
     return X, days
 
-def get_human_409b2_data(n_points):
-    
-    # Path to input files
-    data_path = DATA_DIR+'human_409b2/human-409b2.data.npy'
-    labels_path = DATA_DIR+'human_409b2/human-409b2.labels.npy'
-
-    data = np.load(data_path)
-    labels = np.load(labels_path)
-
-    # subsample data
-    if n_points < data.shape[0]:
-        random_indices = np.random.choice(data.shape[0], n_points, replace=False)
-        data = data[random_indices, :]
-        labels = labels[random_indices]
-    return data, labels
 
 def get_chimp_data(n_points):
     
