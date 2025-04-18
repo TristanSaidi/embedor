@@ -4,7 +4,7 @@ import numpy as np
 import torchvision
 import torch
 
-DATA_DIR = "/home/tristan/Research/Fa24/isorc/data/"
+DATA_DIR = "/burg/iicd/users/tls2160/research/Fa24/isorc/data/"
 
 # Data generation functions
 
@@ -889,3 +889,56 @@ def get_developmental_data(n_points):
     days = days[random_indices]
 
     return X, days
+
+def get_human_409b2_data(n_points):
+    
+    # Path to input files
+    data_path = DATA_DIR+'human_409b2/human-409b2.data.npy'
+    labels_path = DATA_DIR+'human_409b2/human-409b2.labels.npy'
+
+    data = np.load(data_path)
+    labels = np.load(labels_path)
+
+    # subsample data
+    if n_points < data.shape[0]:
+        random_indices = np.random.choice(data.shape[0], n_points, replace=False)
+        data = data[random_indices, :]
+        labels = labels[random_indices]
+    return data, labels
+
+def get_chimp_data(n_points):
+    
+    # Path to input files
+    data_path = DATA_DIR+'chimp/chimp.data.npy'
+    labels_path = DATA_DIR+'chimp/chimp.labels.npy'
+
+    data = np.load(data_path)
+    labels = np.load(labels_path)
+
+    # subsample data
+    if n_points < data.shape[0]:
+        random_indices = np.random.choice(data.shape[0], n_points, replace=False)
+        data = data[random_indices, :]
+        labels = labels[random_indices]
+    return data, labels
+
+def get_macosko_data(n_points):
+    import gzip
+    import pickle
+    data_path = DATA_DIR+'macosko/macosko_2015.pkl.gz'
+    with gzip.open(data_path, 'rb') as f:
+        data_and_labels = pickle.load(f)
+    # get 50 pcs
+    data = data_and_labels['pca_50']
+    y_str = data_and_labels['CellType1']
+    y_int = np.zeros(y_str.shape)
+    # convert to int
+    for i, label in enumerate(np.unique(y_str)):
+        y_int[y_str == label] = i
+    # subsample data
+    if n_points < data.shape[0]:
+        random_indices = np.random.choice(data.shape[0], n_points, replace=False)
+        data = data[random_indices, :]
+        y_int = y_int[random_indices]
+    return data, y_int
+    

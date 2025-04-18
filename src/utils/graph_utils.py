@@ -123,7 +123,7 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     return G, A
 
 
-def low_energy_edge_stats(embdng, full_graph, low_energy_graph, pctg=0.1):
+def low_energy_edge_stats(embdng, full_graph, low_energy_graph, pctg=1.0):
     # find average edge distance for original graph in embedding space
     distances = np.zeros(len(full_graph.edges()))
     for idx, (i, j) in enumerate(full_graph.edges()):

@@ -22,7 +22,7 @@ exp_params = {
 
 
 def developmental(n_points):
-    save_path = '/burg/iicd/users/tls2160/research/Fa24/isorc/outputs/developmental'
+    save_path = '/burg/iicd/users/tls2160/research/Fa24/isorc/outputs/macosko'
     os.makedirs(save_path, exist_ok=True)
 
     from datetime import datetime
@@ -30,21 +30,22 @@ def developmental(n_points):
     dt_string = now.strftime("%Y-%m-%d %H:%M:%S")
     os.makedirs(os.path.join(save_path, dt_string), exist_ok=True)
 
-    developmental_path = os.path.join(save_path, dt_string, 'developmental_trajectories')
-    os.makedirs(developmental_path, exist_ok=True)
+    macosko_path = os.path.join(save_path, dt_string, 'macosko')
+    os.makedirs(macosko_path, exist_ok=True)
 
-    developmental_data, days = get_developmental_data(n_points=n_points)
+    data, labels = get_macosko_data(n_points=n_points)
+
     stats_dict = {}
 
     embedor = EmbedOR(exp_params)
-    embedding = embedor.fit_transform(developmental_data)
+    embedding = embedor.fit_transform(data)
     embedor_euc = EmbedOR(exp_params, metric='euclidean')
-    embedding_euc = embedor_euc.fit_transform(developmental_data)
-    umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean').fit_transform(developmental_data)
-    tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300, init='random').fit_transform(developmental_data)
-    phate_emb = phate.PHATE(n_jobs=-2).fit_transform(developmental_data)
-    spectral_emb = SpectralEmbedding(n_components=2).fit_transform(developmental_data)
-    iso_emb = Isomap(n_neighbors=15, n_components=2).fit_transform(developmental_data)
+    embedding_euc = embedor_euc.fit_transform(data)
+    umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean').fit_transform(data)
+    tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300, init='random').fit_transform(data)
+    phate_emb = phate.PHATE(n_jobs=-2).fit_transform(data)
+    spectral_emb = SpectralEmbedding(n_components=2).fit_transform(data)
+    iso_emb = Isomap(n_neighbors=15, n_components=2).fit_transform(data)
 
     # plot with 33% lowest energy edges
     edge_energies = embedor.distances
@@ -116,10 +117,10 @@ def developmental(n_points):
     }
 
     # save figures
-    embedor_path = os.path.join(developmental_path, 'embedor')
+    embedor_path = os.path.join(macosko_path, 'embedor')
     os.makedirs(embedor_path, exist_ok=False)
     plt.figure(figsize=(10, 10))
-    plot_graph_2D(embedding, embedor.G, node_color=days[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plot_graph_2D(embedding, embedor.G, node_color=labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
     plt.savefig(os.path.join(embedor_path, 'class_annot.png'))
     plt.close()
     plt.figure(figsize=(10, 10))
@@ -135,10 +136,10 @@ def developmental(n_points):
     plt.savefig(os.path.join(embedor_path, 'variable_edge_widths.png'))
     plt.close()
 
-    embedor_euc_path = os.path.join(developmental_path, 'embedor_euc')
+    embedor_euc_path = os.path.join(macosko_path, 'embedor_euc')
     os.makedirs(embedor_euc_path, exist_ok=False)
     plt.figure(figsize=(10, 10))
-    plot_graph_2D(embedding_euc, embedor_euc.G, node_color=days[embedor_euc.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plot_graph_2D(embedding_euc, embedor_euc.G, node_color=labels[embedor_euc.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
     plt.savefig(os.path.join(embedor_euc_path, 'class_annot.png'))
     plt.close()
     plt.figure(figsize=(10, 10))
@@ -154,10 +155,10 @@ def developmental(n_points):
     plt.savefig(os.path.join(embedor_euc_path, 'variable_edge_widths.png'))
     plt.close()
     
-    umap_path = os.path.join(developmental_path, 'umap')
+    umap_path = os.path.join(macosko_path, 'umap')
     os.makedirs(umap_path, exist_ok=False)
     plt.figure(figsize=(10, 10))
-    plot_graph_2D(umap_emb, embedor.G, node_color=days[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plot_graph_2D(umap_emb, embedor.G, node_color=labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
     plt.savefig(os.path.join(umap_path, 'class_annot.png'))
     plt.close()
     plt.figure(figsize=(10, 10))
@@ -173,10 +174,10 @@ def developmental(n_points):
     plt.savefig(os.path.join(umap_path, 'variable_edge_widths.png'))
     plt.close()
     
-    tsne_path = os.path.join(developmental_path, 'tsne')
+    tsne_path = os.path.join(macosko_path, 'tsne')
     os.makedirs(tsne_path, exist_ok=False)
     plt.figure(figsize=(10, 10))
-    plot_graph_2D(tsne_emb, embedor.G, node_color=days[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plot_graph_2D(tsne_emb, embedor.G, node_color=labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
     plt.savefig(os.path.join(tsne_path, 'class_annot.png'))
     plt.close()
     plt.figure(figsize=(10, 10))
@@ -192,10 +193,10 @@ def developmental(n_points):
     plt.savefig(os.path.join(tsne_path, 'variable_edge_widths.png'))
     plt.close()
 
-    phate_path = os.path.join(developmental_path, 'phate')
+    phate_path = os.path.join(macosko_path, 'phate')
     os.makedirs(phate_path, exist_ok=False)
     plt.figure(figsize=(10, 10))
-    plot_graph_2D(phate_emb, embedor.G, node_color=days[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plot_graph_2D(phate_emb, embedor.G, node_color=labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
     plt.savefig(os.path.join(phate_path, 'class_annot.png'))
     plt.close()
     plt.figure(figsize=(10, 10))
@@ -211,10 +212,10 @@ def developmental(n_points):
     plt.savefig(os.path.join(phate_path, 'variable_edge_widths.png'))
     plt.close()
     
-    spectral_path = os.path.join(developmental_path, 'spectral')
+    spectral_path = os.path.join(macosko_path, 'spectral')
     os.makedirs(spectral_path, exist_ok=False)
     plt.figure(figsize=(10, 10))
-    plot_graph_2D(spectral_emb, embedor.G, node_color=days[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plot_graph_2D(spectral_emb, embedor.G, node_color=labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
     plt.savefig(os.path.join(spectral_path, 'class_annot.png'))
     plt.close()
     plt.figure(figsize=(10, 10))
@@ -230,10 +231,10 @@ def developmental(n_points):
     plt.savefig(os.path.join(spectral_path, 'variable_edge_widths.png'))
     plt.close()
     
-    iso_path = os.path.join(developmental_path, 'iso')
+    iso_path = os.path.join(macosko_path, 'iso')
     os.makedirs(iso_path, exist_ok=False)
     plt.figure(figsize=(10, 10))
-    plot_graph_2D(iso_emb, embedor.G, node_color=days[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plot_graph_2D(iso_emb, embedor.G, node_color=labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
     plt.savefig(os.path.join(iso_path, 'class_annot.png'))
     plt.close()
     plt.figure(figsize=(10, 10))
@@ -259,8 +260,8 @@ def developmental(n_points):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run EmbedOR on developmental dataset.")
-    parser.add_argument("--n_points", type=int, default=5000, help="Number of points to generate.")
+    parser = argparse.ArgumentParser(description="Run EmbedOR on macosko dataset.")
+    parser.add_argument("--n_points", type=int, default=5000, help="Number of points to use.")
     parser.add_argument("--seed", type=int, default=0, help="Random seed.")
     args = parser.parse_args()
     seed = args.seed    
