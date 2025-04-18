@@ -166,34 +166,6 @@ def make_epochs_per_pair(weights, n_epochs, max_iter=None, min_iter=None):
     -------
     An array of number of epochs per sample, one for each 1-simplex.
     """
-    if max_iter == None:
-        max_iter = n_epochs
-    elif min_iter == None:
-        min_iter = 0
-    result = -1.0 * np.ones_like(weights, dtype=np.float64)
-    max_w, min_w = weights.max(), weights.min()
-    norm_weights = (weights - min_w) / (max_w - min_w)
-    n_samples = ((max_iter-min_iter) * norm_weights + min_iter).astype(int)
-    result[n_samples > 0] = n_epochs/np.float64(n_samples[n_samples > 0])
-    result[n_samples == 0] = n_epochs
-    return result
-
-def make_epochs_per_pair(weights, n_epochs, max_iter=None, min_iter=None):
-    """Given a set of weights and number of epochs generate the number of
-    epochs per sample for each weight.
-
-    Parameters
-    ----------
-    weights: array of shape (n, n)
-        The weights of how much we wish to sample each 1-simplex.
-
-    n_epochs: int
-        The total number of epochs we want to train for.
-
-    Returns
-    -------
-    An array of number of epochs per sample, one for each 1-simplex.
-    """
     norm_weights = weights / weights.sum()
     batch_size = n_epochs / norm_weights.max() # take large enough batch size so highest weight edge is sampled every epoch
     n_samples = (norm_weights * batch_size).astype(int) # number of epochs per sample
