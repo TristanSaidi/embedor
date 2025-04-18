@@ -12,39 +12,19 @@ from sklearn.manifold import TSNE, Isomap, SpectralEmbedding
 import phate
 import json
 from src.utils import *
+import os
+
+REPO_ROOT = os.getenv('PYTHONPATH')
 
 sns.set_theme()
-# diffusion distance
 
 exp_params = {
-    'alpha': 3
+    'p': 3
 }
 
-def low_energy_edge_stats(embdng, full_graph, low_energy_graph, pctg=0.1):
-    # find average edge distance for original graph in embedding space
-    distances = np.zeros(len(full_graph.edges()))
-    for idx, (i, j) in enumerate(full_graph.edges()):
-        dist = np.linalg.norm(embdng[i] - embdng[j])
-        distances[idx] = dist
-    # find the average distance
-    avg_distance = np.mean(distances)
-    # find the std of the distances
-    std_distance = np.std(distances)
 
-    # now compute z-scores for each low energy edge
-    z_scores = np.zeros(len(low_energy_graph.edges()))
-    for idx, (i, j) in enumerate(low_energy_graph.edges()):
-        dist = np.linalg.norm(embdng[i] - embdng[j])
-        z_scores[idx] = (dist - avg_distance) / std_distance
-    z_scores_sorted = np.sort(z_scores)
-    # return mean and std of top 10% of z-scores
-    top_z_scores = z_scores_sorted[-int(len(z_scores) * pctg):]
-    mean_z_score = np.mean(top_z_scores)
-    std_z_score = np.std(top_z_scores)
-    return mean_z_score, std_z_score
-
-def embryoid_body(n_points):
-    save_path = '/home/tristan/Research/Fa24/isorc/outputs/developmental'
+def developmental(n_points):
+    save_path = f'{REPO_ROOT}/outputs/developmental'
     os.makedirs(save_path, exist_ok=True)
 
     from datetime import datetime
@@ -55,22 +35,21 @@ def embryoid_body(n_points):
     developmental_path = os.path.join(save_path, dt_string, 'developmental_trajectories')
     os.makedirs(developmental_path, exist_ok=True)
 
-    # developmental_data, days = get_embryoid_body_data(n_points=n_points)
-    developmental_data, days = get_embryoid_body_data(n_points=n_points)
+    developmental_data, days = get_developmental_data(n_points=n_points)
     stats_dict = {}
 
-    embedor = EmbedOR(exp_params, fast=True)
+    embedor = EmbedOR(exp_params)
     embedding = embedor.fit_transform(developmental_data)
     embedor_euc = EmbedOR(exp_params, metric='euclidean')
     embedding_euc = embedor_euc.fit_transform(developmental_data)
     umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean').fit_transform(developmental_data)
-    tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300).fit_transform(developmental_data)
+    tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300, init='random').fit_transform(developmental_data)
     phate_emb = phate.PHATE(n_jobs=-2).fit_transform(developmental_data)
-    spectral_emb = SpectralEmbedding(n_components=2, affinity='rbf').fit_transform(developmental_data)
+    spectral_emb = SpectralEmbedding(n_components=2).fit_transform(developmental_data)
     iso_emb = Isomap(n_neighbors=15, n_components=2).fit_transform(developmental_data)
 
     # plot with 33% lowest energy edges
-    edge_energies = embedor.energies
+    edge_energies = embedor.distances
     # sort the edges by energy
     indices = np.argsort(edge_energies)
     # get the top 100 edges
@@ -282,10 +261,10 @@ def embryoid_body(n_points):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run EmbedOR on embryoid body dataset.")
+    parser = argparse.ArgumentParser(description="Run EmbedOR on developmental dataset.")
     parser.add_argument("--n_points", type=int, default=5000, help="Number of points to generate.")
     parser.add_argument("--seed", type=int, default=0, help="Random seed.")
     args = parser.parse_args()
     seed = args.seed    
     np.random.seed(seed)
-    embryoid_body(args.n_points)
+    developmental(args.n_points)

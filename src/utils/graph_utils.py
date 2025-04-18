@@ -3,61 +3,7 @@ import numpy as np
 from sklearn import neighbors
 from src.ollivier_ricci import OllivierRicci
 import pynndescent
-import tqdm
 
-def compute_eff_eps_graph(G, edge):
-    """
-    Compute the effective epsilon for a given edge.
-    
-    Parameters
-    ----------
-    G : networkx.Graph
-        The graph.
-    edge : tuple
-        The edge.
-    
-    Returns
-    -------
-    effective_eps : float
-        The effective epsilon.
-    """
-    i, j = edge
-    dists = []
-    for k in G.neighbors(i):
-        dists.append(G[i][k]['weight'])
-    for k in G.neighbors(j):
-        dists.append(G[j][k]['weight'])
-    effective_eps = np.mean(dists)
-    return effective_eps
-
-def compute_eff_eps_adj(A, n_neighbors, edge):
-    """
-    Compute the effective epsilon for a given edge.
-    
-    Parameters
-    ----------
-    A : np.ndarray
-        The adjacency matrix.
-    edge : tuple
-        The edge.
-    
-    Returns
-    -------
-    effective_eps : float
-        The effective epsilon.
-    """
-    i, j = edge
-    dists = A[i, :]
-    dists = dists[dists != 0]
-    k_nearest = np.argsort(dists)[1:n_neighbors+1]
-    effective_eps_i = np.mean(dists[k_nearest])
-    # find the k-nearest neighbors of j
-    dists = A[:,j]
-    dists = dists[dists != 0]
-    k_nearest = np.argsort(dists)[1:n_neighbors+1]
-    effective_eps_j = np.mean(dists[k_nearest])
-    effective_eps = max(effective_eps_i, effective_eps_j)
-    return effective_eps
 
 def compute_orc(G, nbrhood_size=1):
     """
@@ -73,7 +19,7 @@ def compute_orc(G, nbrhood_size=1):
     G : networkx.Graph
         The graph with the Ollivier-Ricci curvatures as edge attributes.
     """
-    orc = OllivierRicci(G, weight="effective_eps", alpha=0.0, method='OTD', verbose='INFO', nbrhood_size=nbrhood_size)
+    orc = OllivierRicci(G, weight="unweighted", alpha=0.0, method='OTD', verbose='INFO', nbrhood_size=nbrhood_size)
     orc.compute_ricci_curvature()
     orcs = []
     for i, j, _ in orc.G.edges(data=True):
@@ -82,120 +28,6 @@ def compute_orc(G, nbrhood_size=1):
         'G': orc.G,
         'orcs': orcs,
     }
-
-def get_edge_stats(G, cluster=None, data_supersample_dict=None):
-    """ 
-    Get the number of good and bad edges in the graph.
-    Parameters
-    ----------
-    G : networkx.Graph
-        The graph.
-    cluster : array-like, shape (n_samples,), optional
-        The cluster assignment.
-    data_supersample_dict : dict, optional
-        The dictionary containing the supersampled data and subsample indices.
-    Returns
-    -------
-    num_good_edges : int
-        The number of good edges.
-    num_bad_edges : int
-        The number of bad edges.
-    """
-    edge_labels = get_edge_labels(G, cluster, data_supersample_dict)
-    num_good_edges = sum(edge_labels)
-    num_bad_edges = len(edge_labels) - num_good_edges
-    return num_good_edges, num_bad_edges
-
-def get_edge_labels(G, cluster=None, data_supersample_dict=None, scale=None):
-    """
-    Get the edge labels (good/bad) from a cluster assignment or geodesic distance.
-    Parameters
-    ----------
-    G : networkx.Graph
-        The graph.
-    cluster : array-like, shape (n_samples,), optional
-        The cluster assignment.
-    data_supersample_dict : dict, optional
-        The dictionary containing the supersampled data and subsample indices.
-    scale : float, optional
-        The scale parameter for estimating labels from geodesic distance.
-    Returns
-    -------
-    edge_labels : list
-        The edge labels.
-    """
-    if cluster is None:
-        return get_edge_labels_from_geodesic(G, data_supersample_dict, scale)
-    else:
-        return get_edge_labels_from_cluster(G, cluster)
-
-def get_edge_labels_from_cluster(G, cluster):
-    """
-    Get the edge labels (good/bad) from a cluster assignment.
-    Parameters
-    ----------
-    G : networkx.Graph
-        The graph.
-    cluster : array-like, shape (n_samples,)
-        The cluster assignment.
-    Returns
-    -------
-    edge_labels : list
-        The edge labels.
-    """
-    edge_labels = []
-    for i, j, _ in G.edges(data=True):
-        if cluster[i] == cluster[j]:
-            edge_labels.append(1)
-        else:
-            edge_labels.append(0)
-    return edge_labels
-
-def get_edge_labels_from_geodesic(G, data_supersample_dict, scale=10):
-    """ 
-    Get the edge labels (good/bad) from the estimated noiseless geodesic distance.
-
-    Parameters
-    ----------
-    G : networkx.Graph
-        The graph.
-    data_supersample_dict : dict
-        The dictionary containing the supersampled data and subsample indices.
-    
-    Returns
-    -------
-    edge_labels : list
-        The edge labels.
-    """
-
-    data_supersample = data_supersample_dict['data_supersample']
-    subsample_indices = data_supersample_dict['subsample_indices']
-
-    # make a new graph with the supersampled data
-    G_supersample, _ = make_prox_graph(data_supersample, mode='nbrs', n_neighbors=20)
-
-    edge_labels = []
-    
-    with tqdm.tqdm(total=len(G.edges()), desc='Computing edge labels') as pbar:
-        for i, j, _ in G.edges(data=True):
-            # find geodesic distance in the supersampled graph
-            d_G_supersample = nx.shortest_path_length(G_supersample, source=subsample_indices[i], target=subsample_indices[j], weight='weight')
-            
-            # find max distance between i and i's neighbors, j and j's neighbors
-            distances_i = []
-            distances_j = []
-            for k in G.neighbors(i):
-                distances_i.append(G[i][k]['weight'])
-            for k in G.neighbors(j):
-                distances_j.append(G[j][k]['weight'])
-            
-            effective_eps = max(np.max(distances_i), np.max(distances_j))
-            if d_G_supersample > scale*effective_eps:
-                edge_labels.append(0)
-            else:
-                edge_labels.append(1)
-            pbar.update(1)
-    return edge_labels
 
 
 def get_nn_graph(data, exp_params):
@@ -282,13 +114,15 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
                 G.add_edge(i, j, weight=A[i, j]) # weight is the euclidean distance
                 nodes.add(i)
                 nodes.add(j)
+                # add unweighted entry in dict
+                G[i][j]['unweighted'] = 1
 
     assert G.is_directed() == False, "The graph is directed."
     assert len(G.nodes()) == n_points, "The graph has isolated nodes."
     return G, A
 
 
-def low_energy_edge_stats(embdng, full_graph, low_energy_graph, pctg=0.1):
+def low_energy_edge_stats(embdng, full_graph, low_energy_graph, pctg=1.0):
     # find average edge distance for original graph in embedding space
     distances = np.zeros(len(full_graph.edges()))
     for idx, (i, j) in enumerate(full_graph.edges()):
