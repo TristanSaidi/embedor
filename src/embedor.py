@@ -7,6 +7,7 @@ import numpy as np
 from src.utils.layout import *
 from sklearn.manifold import SpectralEmbedding
 import scipy
+import time
 
 class EmbedOR(object):
     def __init__(
@@ -15,7 +16,8 @@ class EmbedOR(object):
             dim=2,
             verbose=False,
             seed=10,
-            metric='orc'
+            edge_weight='orc',
+            dist='diffusion_potential'
         ):
 
         """ 
@@ -34,9 +36,10 @@ class EmbedOR(object):
         self.epochs = self.exp_params.get('epochs', 300)
         self.weighted = self.exp_params.get('weighted', True)
         self.perplexity = self.exp_params.get('perplexity', 150)
-        self.metric = metric
+        self.edge_weight = edge_weight
+        self.dist = dist
         self.exp_params = {
-            'mode': 'nbrs',
+            'mode': 'descent',
             'n_neighbors': self.k,
             'p': self.p,
         }
@@ -70,6 +73,7 @@ class EmbedOR(object):
 
 
     def _update_G(self):
+        time_start = time.time()
         self.affinities = []
         self.distances = []
         for i, (u,v) in enumerate(self.G.edges):
@@ -78,11 +82,14 @@ class EmbedOR(object):
             self.G[u][v]['affinity'] = self.all_affinities[idx_u, idx_v]
             self.affinities.append(self.all_affinities[idx_u, idx_v])
             self.distances.append(self.apsp[idx_u, idx_v])
+        time_end = time.time()
+        print(f"Time taken to update the graph: {time_end - time_start:.2f} seconds")
 
     def _build_nnG(self):
         """
         Build the nearest neighbor graph and compute ORC for each edge.
         """
+        time_start = time.time()
         if self.X is None:
             raise ValueError("Data must be provided to build the nearest neighbor graph.")
         # compute diameter
@@ -91,17 +98,24 @@ class EmbedOR(object):
         # compute nearest neighbor graph
         return_dict = get_nn_graph(self.X, self.exp_params)
         G = return_dict['G']
+        time_end = time.time()
+        print(f"Time taken to build the graph: {time_end - time_start:.2f} seconds")
+
+        time_start = time.time()
         # compute ORC
         return_dict = compute_orc(G, nbrhood_size=1) # compute ORC using 1-hop neighborhood
         self.G = return_dict['G']
         self.orcs = return_dict['orcs']
         self.A = nx.to_numpy_array(self.G, weight='weight', nodelist=list(range(len(self.G.nodes()))))
         self.edge_mask = np.where(self.A > 0, 1, 0)
+        time_end = time.time()
+        print(f"Time taken to compute ORC: {time_end - time_start:.2f} seconds")
 
 
     def _compute_distances(self, max_val=np.inf):
         # compute energy for each edge
-        if self.metric == "orc":
+        time_start = time.time()
+        if self.edge_weight == "orc":
             energies = []
             max_energy = 0        
             for u, v in self.G.edges():
@@ -122,14 +136,95 @@ class EmbedOR(object):
             assert np.all(np.where(self.A_energy > 0, 1, 0) == self.edge_mask), "invalid entries"
             assert np.all(self.A_energy >= 0), "invalid entries"
 
-            self.apsp = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
-        
-        elif self.metric == "euclidean":
+            if self.dist == "graph_geodesic":
+                self.apsp = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
+            elif self.dist == "diffusion":
+                desired_acc = 0.25
+                t = 50
+                def diffusion_transition_matrix(W, epsilon):
+                    """
+                    Compute the transition matrix for diffusion maps from a weighted adjacency matrix.
+
+                    Parameters:
+                        W (numpy.ndarray): Weighted adjacency matrix (NxN).
+
+                    Returns:
+                        numpy.ndarray: Transition matrix (NxN).
+                    """
+                    # symmetrize the matrix
+                    W = (W + W.T) / 2
+                    edge_mask = W > 0
+                    # convert to affinity matrix
+                    W = np.exp(-W**2 / epsilon)
+                    W[~edge_mask] = 0  # Set non-edges to zero
+                    D = np.sum(W, axis=1)  # Compute the degree vector
+                    D_inv = np.diag(1.0 / D)  # Compute D^(-1)
+                    P = D_inv @ W  # Compute P = D^(-1) W
+                    assert np.allclose(np.sum(P, axis=1), 1), "Rows of P must sum to 1."
+                    return P 
+                
+                P = diffusion_transition_matrix(self.A_energy, epsilon=1)
+                # compute the eigenvalues and eigenfunctions of the Laplacian matrix
+                eigvals, eigvecs = np.linalg.eig(P)
+                print(np.max(np.abs(eigvals)))
+                # sort the eigenvalues and eigenvectors from largest to smallest
+                idx = eigvals.argsort()[::-1]
+                eigvals = eigvals[idx]
+                eigvecs = eigvecs[:, idx]
+                assert np.all(np.abs(eigvals) <= 1+1e-5), "Eigenvalues must have magnitude no larger than 1."
+                # compute required number of eigenvectors to achieve desired accuracy
+                eval1 = np.abs(eigvals[1])
+                s = np.max(np.argwhere(np.abs(eigvals)**t > (eval1)**t * desired_acc))
+                print(f"Number of eigenvectors to achieve desired accuracy: {s}")
+                # take top 20 eigenvalues and eigenvectors
+                eigvals = eigvals[:s]
+                eigvecs = eigvecs[:, :s]
+                # diffusion mapping
+                self.dmap = np.stack([(eigvals**t) * eigvec for eigvec in eigvecs], axis=0)
+                # compute the diffusion distance
+                from sklearn.metrics import pairwise_distances
+                self.apsp = pairwise_distances(self.dmap, metric='euclidean')
+                print(self.apsp.shape)
+
+            elif self.dist == "diffusion_potential": # phate distance
+                t = 50
+                def diffusion_transition_matrix(W, epsilon):
+                    """
+                    Compute the transition matrix for diffusion maps from a weighted adjacency matrix.
+
+                    Parameters:
+                        W (numpy.ndarray): Weighted adjacency matrix (NxN).
+
+                    Returns:
+                        numpy.ndarray: Transition matrix (NxN).
+                    """
+                    # symmetrize the matrix
+                    W = (W + W.T) / 2
+                    # convert to affinity matrix
+                    W = np.exp(-W**2 / epsilon)
+                    D = np.sum(W, axis=1)  # Compute the degree vector
+                    D_inv = np.diag(1.0 / D)  # Compute D^(-1)
+                    P = D_inv @ W  # Compute P = D^(-1) W
+                    assert np.allclose(np.sum(P, axis=1), 1), "Rows of P must sum to 1."
+                    return P 
+                
+                P = diffusion_transition_matrix(self.A_energy, epsilon=1)
+                # clamp min value to 1e-5
+                P = np.clip(P, 1e-5, None)
+                U = -np.log(P)
+                # pdist
+                from sklearn.metrics import pairwise_distances
+                self.apsp = pairwise_distances(U, metric='euclidean')
+
+        elif self.edge_weight == "euclidean":
             self.apsp = scipy.sparse.csgraph.shortest_path(self.A, unweighted=False, directed=False)
             
         assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symmetric."
+        time_end = time.time()
+        print(f"Time taken to compute distances: {time_end - time_start:.2f} seconds")
 
     def _compute_affinities(self):
+        time_start = time.time()
         from scipy.spatial.distance import squareform     
         self.all_affinities = squareform(joint_probabilities(self.apsp, desired_perplexity=self.perplexity, verbose=0))
 
@@ -139,8 +234,11 @@ class EmbedOR(object):
         # fill diagonal with 0
         np.fill_diagonal(self.all_affinities, 0)
         np.fill_diagonal(self.all_repulsions, 0)
+        time_end = time.time()
+        print(f"Time taken to compute affinities: {time_end - time_start:.2f} seconds")
 
     def _init_embedding(self):
+        time_start = time.time()
         # spectral initialization
         self.A_affinity = nx.to_numpy_array(self.G, weight='affinity', nodelist=list(range(len(self.G.nodes()))))
         self.spectral_init = SpectralEmbedding(
@@ -155,9 +253,11 @@ class EmbedOR(object):
             np.max(self.embedding, axis=0) - np.min(self.embedding, axis=0)
         ) * 1 - 0.5
         self.spectral_init = self.embedding.copy()
+        time_end = time.time()
+        print(f"Time taken to initialize embedding: {time_end - time_start:.2f} seconds")
 
     def _layout(self, affinities, repulsions):
-
+        time_start = time.time()
         # how many epochs to SKIP for each sample
         self.epochs_per_pair_positive = make_epochs_per_pair(affinities, n_epochs=self.epochs)
         self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=self.epochs)
@@ -175,6 +275,8 @@ class EmbedOR(object):
             initial_alpha=0.25,
             verbose=False,
         )
+        time_end = time.time()
+        print(f"Time taken to optimize embedding: {time_end - time_start:.2f} seconds")
 
     def plot_distances(self):
         plt.figure()
