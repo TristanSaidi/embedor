@@ -9,6 +9,19 @@ from sklearn.manifold import SpectralEmbedding
 import scipy
 import time
 
+ENERGY_PARAMS = {
+    'orc': {
+        'k_max': 1,
+        'k_min': -2,
+        'k_crit': 0
+    }, 
+    'beckmann': {
+        'k_max': 1,
+        'k_min': 0.45,
+        'k_crit': 0.775
+    }
+}
+
 class EmbedOR(object):
     def __init__(
             self, 
@@ -37,6 +50,12 @@ class EmbedOR(object):
         self.weighted = self.exp_params.get('weighted', True)
         self.perplexity = self.exp_params.get('perplexity', 150)
         self.edge_weight = edge_weight
+        # obtain energy parameters
+        if edge_weight in ENERGY_PARAMS:
+            energy_params = ENERGY_PARAMS[edge_weight]
+            self.k_max = energy_params['k_max']
+            self.k_min = energy_params['k_min']
+            self.k_crit = energy_params['k_crit']
         self.dist = dist
         self.exp_params = {
             'mode': 'descent',
@@ -103,9 +122,13 @@ class EmbedOR(object):
 
         time_start = time.time()
         # compute ORC
-        return_dict = compute_orc(G, nbrhood_size=1) # compute ORC using 1-hop neighborhood
+        if self.edge_weight == 'orc':
+            return_dict = compute_orc(G, nbrhood_size=1) # compute ORC using 1-hop neighborhood
+            self.orcs = return_dict['orcs']
+        elif self.edge_weight == 'beckmann':
+            return_dict = compute_beckmann_orc(G)
+            self.orcs = return_dict['orcs']
         self.G = return_dict['G']
-        self.orcs = return_dict['orcs']
         self.A = nx.to_numpy_array(self.G, weight='weight', nodelist=list(range(len(self.G.nodes()))))
         self.edge_mask = np.where(self.A > 0, 1, 0)
         time_end = time.time()
@@ -114,15 +137,17 @@ class EmbedOR(object):
 
     def _compute_distances(self, max_val=np.inf):
         # compute energy for each edge
+        k_max = self.k_max
+        k_min = self.k_min
+        k_crit = self.k_crit
         time_start = time.time()
-        if self.edge_weight == "orc":
+        if self.edge_weight != "euclidean":
             energies = []
             max_energy = 0        
-            for u, v in self.G.edges():
-                orc = self.G[u][v]['ricciCurvature']
-                
-                c = 1/(np.log(3) - np.log(2))
-                energy = (-c*np.log(orc + 2) + c*np.log(2) + 1) ** self.p + 1 # energy(+1) = 0, energy(-2) = infty,
+            for idx, (u, v) in enumerate(self.G.edges()):
+                orc = self.orcs[idx]
+                c = 1/np.log((k_max-k_min)/(k_crit-k_min))                
+                energy = (-c * np.log(orc - k_min) + c * np.log(k_crit - k_min) + 1) ** self.p + 1 # energy(k_max) = 1, energy(k_min) = infty, energy(k_crit) = 2
                 max_energy = max(energy, max_energy)
                 energy = np.clip(energy, 0, max_val) # clip energy to max
                 if self.weighted:
@@ -139,7 +164,7 @@ class EmbedOR(object):
             if self.dist == "graph_geodesic":
                 self.apsp = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False, method='D')
 
-        elif self.edge_weight == "euclidean":
+        else:
             self.apsp = scipy.sparse.csgraph.shortest_path(self.A, unweighted=False, directed=False)
             
         assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symmetric."

@@ -3,7 +3,11 @@ import numpy as np
 from sklearn import neighbors
 from src.ollivier_ricci import OllivierRicci
 import pynndescent
+import time
+import multiprocessing as mp
+import scipy
 
+_A = None
 
 def compute_orc(G, nbrhood_size=1):
     """
@@ -28,6 +32,85 @@ def compute_orc(G, nbrhood_size=1):
         'G': orc.G,
         'orcs': orcs,
     }
+
+def compute_beckmann_orc(G):
+    """
+    Compute the ORC using the Beckmann-2 distance.
+    Parameters
+    ----------
+    G : networkx.Graph
+        The graph.
+    Returns
+    -------
+    G : networkx.Graph
+        The graph with the Beckmann-2 distances as edge attributes.
+    """
+    A = nx.to_numpy_array(G, weight='weight', nodelist=list(range(len(G.nodes()))))
+    A[A > 0] = 1
+    # compute the Laplacian matrix
+    degrees = np.sum(A, axis=1)
+    D = np.diag(degrees)
+    L = D - A
+    # compute the pseudo-inverse of the Laplacian matrix
+    time_start = time.time()
+    L_pinv = scipy.linalg.pinv(L)
+    time_end = time.time()
+    print(f"Time taken to compute pseudo-inverse of Laplacian: {time_end - time_start} seconds")
+    # get the edges of the graph
+    edges = np.array(list(G.edges()))
+    beckmann_orcs = _compute_beckmann_orc(edges, L_pinv, A)
+    return {
+        'G': G,
+        'orcs': beckmann_orcs,
+    }
+
+def _distribute_density(edge):
+    global _A
+    x, y = edge
+    # get 1-hop neighbors of x and y
+    x_neighbors = np.where(_A[x, :] > 0)[0]
+    y_neighbors = np.where(_A[y, :] > 0)[0]
+    # exclude x and y from the neighbors
+    x_neighbors = np.delete(x_neighbors, np.where(x_neighbors == x))
+    y_neighbors = np.delete(y_neighbors, np.where(y_neighbors == y))
+    # construct uniform distribution over neighbors
+    assert len(x_neighbors) > 0, "x has no neighbors"
+    assert len(y_neighbors) > 0, "y has no neighbors"
+    mass_x = 1 / len(x_neighbors)
+    mass_y = 1 / len(y_neighbors)
+    mu = np.zeros(_A.shape[0])
+    nu = np.zeros(_A.shape[0])
+    mu[x_neighbors] = mass_x
+    nu[y_neighbors] = mass_y
+    return mu, nu
+
+def distribute_densities(edges, A):
+    """ 
+    Distribute the densities of the edges over the 1-hop neighbors of the nodes
+    in the edge. 
+    """
+    # use multiprocessing to speed up the for loop above
+    global _A
+    _A = A
+    with mp.Pool(mp.cpu_count()) as pool:
+        results = pool.map(_distribute_density, edges)
+    mus = np.stack([result[0] for result in results], axis=1)
+    nus = np.stack([result[1] for result in results], axis=1)
+    return mus, nus
+
+def _compute_beckmann_orc(edges, L_pinv, A):
+    """ 
+    Compute ORC using the Beckmann-2 distance instead of the Wasserstein-1 distance.
+    """
+    time_start = time.time()
+    mus, nus = distribute_densities(edges, A)
+    time_end = time.time()
+    print(f"Time taken to distribute densities: {time_end - time_start} seconds")
+    diff = mus - nus
+    beckman_dists = np.sum(np.multiply(diff.T @ L_pinv, diff.T), axis=1)
+    beckman_dists = beckman_dists ** 0.5
+    beckmann_orcs = 1 - beckman_dists
+    return beckmann_orcs
 
 
 def get_nn_graph(data, exp_params):
