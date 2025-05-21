@@ -3,7 +3,6 @@ import numpy as np
 import networkx as nx
 import os
 
-from src.utils.eval_utils import *
 
 # plotting functions
 
