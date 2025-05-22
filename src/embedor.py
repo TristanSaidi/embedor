@@ -7,6 +7,7 @@ import numpy as np
 from src.utils.layout import *
 from sklearn.manifold import SpectralEmbedding
 import scipy
+import time
 
 class EmbedOR(object):
     def __init__(
@@ -88,11 +89,20 @@ class EmbedOR(object):
         # compute diameter
         from sklearn.metrics import pairwise_distances
         self.diameter = np.max(pairwise_distances(self.X))
+        
         # compute nearest neighbor graph
+        time_start = time.time()
         return_dict = get_nn_graph(self.X, self.exp_params)
+        time_end = time.time()
         G = return_dict['G']
+        print(f"Time taken to build the nearest neighbor graph: {time_end - time_start:.2f} seconds")
+        
         # compute ORC
+        time_start = time.time()
         return_dict = compute_orc(G, nbrhood_size=1) # compute ORC using 1-hop neighborhood
+        time_end = time.time()
+        print(f"Time taken to compute ORC: {time_end - time_start:.2f} seconds")
+
         self.G = return_dict['G']
         self.orcs = return_dict['orcs']
         self.A = nx.to_numpy_array(self.G, weight='weight', nodelist=list(range(len(self.G.nodes()))))
@@ -101,6 +111,7 @@ class EmbedOR(object):
 
     def _compute_distances(self, max_val=np.inf):
         # compute energy for each edge
+        time_start = time.time()
         if self.metric == "orc":
             energies = []
             max_energy = 0        
@@ -126,7 +137,9 @@ class EmbedOR(object):
         
         elif self.metric == "euclidean":
             self.apsp = scipy.sparse.csgraph.shortest_path(self.A, unweighted=False, directed=False)
-            
+
+        time_end = time.time()
+        print(f"Time taken to compute distances: {time_end - time_start:.2f} seconds")    
         assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symmetric."
 
     def _compute_affinities(self):
@@ -141,6 +154,7 @@ class EmbedOR(object):
         np.fill_diagonal(self.all_repulsions, 0)
 
     def _init_embedding(self):
+        time_start = time.time()
         # spectral initialization
         self.A_affinity = nx.to_numpy_array(self.G, weight='affinity', nodelist=list(range(len(self.G.nodes()))))
         self.spectral_init = SpectralEmbedding(
@@ -155,9 +169,11 @@ class EmbedOR(object):
             np.max(self.embedding, axis=0) - np.min(self.embedding, axis=0)
         ) * 1 - 0.5
         self.spectral_init = self.embedding.copy()
+        time_end = time.time()
+        print(f"Time taken to initialize embedding: {time_end - time_start:.2f} seconds")
 
     def _layout(self, affinities, repulsions):
-
+        time_start = time.time()
         # how many epochs to SKIP for each sample
         self.epochs_per_pair_positive = make_epochs_per_pair(affinities, n_epochs=self.epochs)
         self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=self.epochs)
@@ -175,6 +191,8 @@ class EmbedOR(object):
             initial_alpha=0.25,
             verbose=False,
         )
+        time_end = time.time()
+        print(f"Time taken to optimize layout: {time_end - time_start:.2f} seconds")
 
     def plot_distances(self):
         plt.figure()
