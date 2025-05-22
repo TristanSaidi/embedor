@@ -7,6 +7,8 @@ import numpy as np
 from src.utils.layout import *
 from sklearn.manifold import SpectralEmbedding
 import scipy
+import networkx as nx
+import networkit as nk
 import time
 
 class EmbedOR(object):
@@ -127,19 +129,17 @@ class EmbedOR(object):
                 self.G[u][v]['energy'] = energy
                 energies.append(energy)
 
-            self.A_energy = nx.to_numpy_array(self.G, weight='energy', nodelist=list(range(len(self.G.nodes()))))
-            assert np.allclose(self.A_energy, self.A_energy.T), "Energy matrix must be symmetric."
-            
-            assert np.all(np.where(self.A_energy > 0, 1, 0) == self.edge_mask), "invalid entries"
-            assert np.all(self.A_energy >= 0), "invalid entries"
+            self.G_nk = nk.nxadapter.nx2nk(self.G, weightAttr='energy')
 
-            self.apsp = scipy.sparse.csgraph.shortest_path(self.A_energy, unweighted=False, directed=False)
-        
         elif self.metric == "euclidean":
-            self.apsp = scipy.sparse.csgraph.shortest_path(self.A, unweighted=False, directed=False)
+            self.G_nk = nk.nxadapter.nx2nk(self.G, weightAttr='weight')
+
+        self.apsp = nk.distance.APSP(self.G_nk).run().getDistances()
+        self.apsp = np.array(self.apsp)
 
         time_end = time.time()
         print(f"Time taken to compute distances: {time_end - time_start:.2f} seconds")    
+        
         assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symmetric."
 
     def _compute_affinities(self):
