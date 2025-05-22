@@ -54,9 +54,9 @@ def plot_graph_2D(X, graph, title=None, node_color='#1f78b4', edge_color='lightg
     plt.figure(figsize=(6,6), dpi=200)
     if type(edge_color) != str:
         mean, std = np.mean(edge_color), np.std(edge_color)
-        edge_vmin = mean - 2*std
-        edge_vmax = mean + 2*std
-        # edge_vmin, edge_vmax = np.min(edge_color), np.max(edge_color)
+        # edge_vmin = mean - 2*std
+        # edge_vmax = mean + 2*std
+        edge_vmin, edge_vmax = np.min(edge_color), np.max(edge_color)
     else:
         edge_vmin, edge_vmax = -1, 1
     nx.draw(graph, X, node_color=node_color, edge_color=edge_color, node_size=node_size, cmap=cmap, edge_cmap=edge_cmap, edge_vmin=edge_vmin, edge_vmax=edge_vmax, width=edge_width)
