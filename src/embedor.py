@@ -11,6 +11,19 @@ import networkx as nx
 import networkit as nk
 import time
 
+ENERGY_PARAMS = {
+    'orc': {
+        'k_max': 1,
+        'k_min': -2,
+        'k_crit': 0
+    },
+    'frc': {
+        'k_max': 25,
+        'k_min': -35,
+        'k_crit': -5
+    }
+}
+
 class EmbedOR(object):
     def __init__(
             self, 
@@ -18,7 +31,7 @@ class EmbedOR(object):
             dim=2,
             verbose=False,
             seed=10,
-            metric='orc'
+            edge_weight='orc'
         ):
 
         """ 
@@ -37,7 +50,14 @@ class EmbedOR(object):
         self.epochs = self.exp_params.get('epochs', 300)
         self.weighted = self.exp_params.get('weighted', True)
         self.perplexity = self.exp_params.get('perplexity', 150)
-        self.metric = metric
+        self.edge_weight = edge_weight
+        # obtain energy parameters
+        if edge_weight in ENERGY_PARAMS:
+            energy_params = ENERGY_PARAMS[edge_weight]
+            self.k_max = energy_params['k_max']
+            self.k_min = energy_params['k_min']
+            self.k_crit = energy_params['k_crit']
+
         self.exp_params = {
             'mode': 'nbrs',
             'n_neighbors': self.k,
@@ -61,26 +81,16 @@ class EmbedOR(object):
 
     def fit(self, X=None):
         self.X = X
+        if self.X.shape[0] > 30000:
+            self.exp_params['mode'] = 'descent'
         print("Building nearest neighbor graph...")
-        self._build_nnG() # self.G, self.orcs, self.A are now available
+        self._build_nnG() # self.G, self.curvatures, self.A are now available
         print("Computing distances...")
         self._compute_distances()
         print("Computing affinities...")
         self._compute_affinities()
         print("Updating the graph attributes...")
-        self._update_G() # add edge attribute 'affinity'
         self.fitted = True
-
-
-    def _update_G(self):
-        self.affinities = []
-        self.distances = []
-        for i, (u,v) in enumerate(self.G.edges):
-            idx_u = u
-            idx_v = v
-            self.G[u][v]['affinity'] = self.all_affinities[idx_u, idx_v]
-            self.affinities.append(self.all_affinities[idx_u, idx_v])
-            self.distances.append(self.apsp[idx_u, idx_v])
 
     def _build_nnG(self):
         """
@@ -101,12 +111,18 @@ class EmbedOR(object):
         
         # compute ORC
         time_start = time.time()
-        return_dict = compute_orc(G, nbrhood_size=1) # compute ORC using 1-hop neighborhood
+        if self.edge_weight == "orc":
+            return_dict = compute_orc(G, nbrhood_size=1) # compute ORC using 1-hop neighborhood
+            self.curvatures = return_dict['orcs']
+        elif self.edge_weight == "frc":
+            return_dict = compute_frc(G)
+            self.curvatures = return_dict['frcs']
+            self.k_min = min(self.k_min, min(self.curvatures)-1) # -1 to avoid log(0)
+            self.k_max = max(self.k_max, max(self.curvatures))
         time_end = time.time()
-        print(f"Time taken to compute ORC: {time_end - time_start:.2f} seconds")
+        print(f"Time taken to compute curvature: {time_end - time_start:.2f} seconds")
 
         self.G = return_dict['G']
-        self.orcs = return_dict['orcs']
         self.A = nx.to_numpy_array(self.G, weight='weight', nodelist=list(range(len(self.G.nodes()))))
         self.edge_mask = np.where(self.A > 0, 1, 0)
 
@@ -114,15 +130,17 @@ class EmbedOR(object):
     def _compute_distances(self, max_val=np.inf):
         # compute energy for each edge
         time_start = time.time()
-        if self.metric == "orc":
+
+        if self.edge_weight != "euclidean":
+            k_max = self.k_max
+            k_min = self.k_min
+            k_crit = self.k_crit
             energies = []
-            max_energy = 0        
-            for u, v in self.G.edges():
-                orc = self.G[u][v]['ricciCurvature']
-                
-                c = 1/(np.log(3) - np.log(2))
-                energy = (-c*np.log(orc + 2) + c*np.log(2) + 1) ** self.p + 1 # energy(+1) = 0, energy(-2) = infty,
-                max_energy = max(energy, max_energy)
+
+            for idx, (u, v) in enumerate(self.G.edges()):
+                orc = self.curvatures[idx]
+                c = 1/np.log((k_max-k_min)/(k_crit-k_min))                
+                energy = (-c * np.log(orc - k_min) + c * np.log(k_crit - k_min) + 1) ** self.p + 1 # energy(k_max) = 1, energy(k_min) = infty, energy(k_crit) = 2                max_energy = max(energy, max_energy)
                 energy = np.clip(energy, 0, max_val) # clip energy to max
                 if self.weighted:
                     energy = energy * self.G[u][v]['weight'] # scale energy by weight (i.e. Euclidean distance)
@@ -130,7 +148,7 @@ class EmbedOR(object):
                 energies.append(energy)
             self.G_nk = nk.nxadapter.nx2nk(self.G, weightAttr='energy')                    
 
-        elif self.metric == "euclidean":
+        else:
             self.G_nk = nk.nxadapter.nx2nk(self.G, weightAttr='weight')
 
         self.apsp = nk.distance.APSP(self.G_nk).run().getDistances()
@@ -157,12 +175,14 @@ class EmbedOR(object):
     def _init_embedding(self):
         time_start = time.time()
         # spectral initialization
-        self.A_affinity = nx.to_numpy_array(self.G, weight='affinity', nodelist=list(range(len(self.G.nodes()))))
-        self.spectral_init = SpectralEmbedding(
-            n_components=self.dim,
-            affinity='precomputed',
+        from umap.spectral import spectral_layout
+        A_affinity_sparse = nx.to_scipy_sparse_array(self.G, weight='affinity', nodelist=list(range(len(self.G.nodes()))))
+        self.spectral_init = spectral_layout(
+            data=None,
+            graph=A_affinity_sparse,
+            dim=self.dim,
             random_state=self.seed,
-        ).fit_transform(self.A_affinity)
+        )
 
         self.embedding = self.spectral_init.copy()
         # scale the embedding to [-0.5, 0.5] x [-0.5, 0.5]

@@ -2,6 +2,7 @@ import networkx as nx
 import numpy as np
 from sklearn import neighbors
 from src.ollivier_ricci import OllivierRicci
+import GraphRicciCurvature.FormanRicci as fr
 import pynndescent
 
 
@@ -27,6 +28,31 @@ def compute_orc(G, nbrhood_size=1):
     return {
         'G': orc.G,
         'orcs': orcs,
+    }
+
+
+def compute_frc(G):
+    """
+    Compute the Forman-Ricci curvature on edges of a graph.
+    Parameters
+    ----------
+    G : networkx.Graph
+        The graph.
+    nbrhood_size : int, optional
+        Number of hops to consider for neighborhood.
+    Returns
+    -------
+    G : networkx.Graph
+        The graph with the Forman-Ricci curvatures as edge attributes.
+    """
+    frc = fr.FormanRicci(G, weight='unweighted')
+    frc.compute_ricci_curvature()
+    frcs = []
+    for i, j, _ in frc.G.edges(data=True):
+        frcs.append(frc.G[i][j]['formanCurvature'])
+    return {
+        'G': frc.G,
+        'frcs': frcs,
     }
 
 
