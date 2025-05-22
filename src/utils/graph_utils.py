@@ -107,10 +107,17 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
         assert epsilon is not None, "epsilon must be specified when mode='eps'."
         A = neighbors.radius_neighbors_graph(X, radius=epsilon, mode='distance')
     elif mode == 'descent':
+        n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
+        n_iters = max(5, int(round(np.log2(X.shape[0]))))
         knn_search_index = pynndescent.NNDescent(
             n_neighbors=n_neighbors,
             data=X,
+            n_trees=n_trees,
+            n_iters=n_iters,
+            max_candidates=60,
             metric='euclidean',
+            low_memory=True,
+            n_jobs=-1,
             verbose=False
         )
         indices, distances = knn_search_index.neighbor_graph

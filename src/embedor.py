@@ -59,7 +59,7 @@ class EmbedOR(object):
             self.k_crit = energy_params['k_crit']
 
         self.exp_params = {
-            'mode': 'nbrs',
+            'mode': 'descent',
             'n_neighbors': self.k,
             'p': self.p,
         }
@@ -81,8 +81,6 @@ class EmbedOR(object):
 
     def fit(self, X=None):
         self.X = X
-        if self.X.shape[0] > 30000:
-            self.exp_params['mode'] = 'descent'
         print("Building nearest neighbor graph...")
         self._build_nnG() # self.G, self.curvatures, self.A are now available
         print("Computing distances...")
