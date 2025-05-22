@@ -128,15 +128,16 @@ class EmbedOR(object):
                     energy = energy * self.G[u][v]['weight'] # scale energy by weight (i.e. Euclidean distance)
                 self.G[u][v]['energy'] = energy
                 energies.append(energy)
-
-            self.G_nk = nk.nxadapter.nx2nk(self.G, weightAttr='energy')
+            self.G_nk = nk.nxadapter.nx2nk(self.G, weightAttr='energy')                    
 
         elif self.metric == "euclidean":
             self.G_nk = nk.nxadapter.nx2nk(self.G, weightAttr='weight')
 
         self.apsp = nk.distance.APSP(self.G_nk).run().getDistances()
         self.apsp = np.array(self.apsp)
-
+        indices = list(self.G.nodes())
+        inverse_indices = [indices.index(i) for i in range(len(indices))]
+        self.apsp = self.apsp[inverse_indices, :][:, inverse_indices]
         time_end = time.time()
         print(f"Time taken to compute distances: {time_end - time_start:.2f} seconds")    
         
