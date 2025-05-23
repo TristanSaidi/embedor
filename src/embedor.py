@@ -193,12 +193,14 @@ class EmbedOR(object):
         time_end = time.time()
         print(f"Time taken to compute distances: {time_end - time_start:.2f} seconds")    
 
-    def _compute_affinities(self):
+    def _compute_affinities(self, p_des=0.1):
         time_start = time.time()
-        self.all_affinities = squareform(joint_probabilities(self.apsp, desired_perplexity=self.perplexity, verbose=0))
+        # sort apsp on axis 1
+        knn_dist = np.sort(self.apsp, axis=1)[:, self.k]
+        sigmas = knn_dist / np.sqrt(np.log(1/p_des))
+        self.all_affinities = np.exp(-self.apsp**2 / (sigmas[:, None]**2))
         del self.apsp
 
-        # symmetrize affinities
         self.all_affinities = (self.all_affinities + self.all_affinities.T) / 2
         self.all_repulsions = 1 - self.all_affinities
         # fill diagonal with 0
