@@ -7,6 +7,7 @@ import numpy as np
 from src.utils.layout import *
 from umap.spectral import spectral_layout
 from scipy.spatial.distance import squareform     
+from scipy.sparse import csr_matrix
 import networkx as nx
 import networkit as nk
 import time
@@ -154,6 +155,9 @@ class EmbedOR(object):
         if self.subsample:
             A_ut = self.A * np.triu(np.ones(self.A.shape), k=1)
             self.knn_indices =  A_ut.nonzero()
+            del A_ut
+        # convert A to sparse matrix
+        self.A = csr_matrix(self.A)
 
     def _compute_distances(self, max_val=np.inf):
         # compute energy for each edge
