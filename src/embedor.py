@@ -5,8 +5,8 @@ from src.utils.graph_utils import *
 # # from src.utils.embeddings import *
 import numpy as np
 from src.utils.layout import *
-from sklearn.manifold import SpectralEmbedding
-import scipy
+from umap.spectral import spectral_layout
+from scipy.spatial.distance import squareform     
 import networkx as nx
 import networkit as nk
 import time
@@ -160,7 +160,7 @@ class EmbedOR(object):
         assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symmetric."
 
     def _compute_affinities(self):
-        from scipy.spatial.distance import squareform     
+        time_start = time.time()
         self.all_affinities = squareform(joint_probabilities(self.apsp, desired_perplexity=self.perplexity, verbose=0))
 
         # symmetrize affinities
@@ -169,11 +169,12 @@ class EmbedOR(object):
         # fill diagonal with 0
         np.fill_diagonal(self.all_affinities, 0)
         np.fill_diagonal(self.all_repulsions, 0)
+        time_end = time.time()
+        print(f"Time taken to compute affinities: {time_end - time_start:.2f} seconds")
 
     def _init_embedding(self):
         time_start = time.time()
         # spectral initialization
-        from umap.spectral import spectral_layout
         A_affinity_sparse = nx.to_scipy_sparse_array(self.G, weight='affinity', nodelist=list(range(len(self.G.nodes()))))
         self.spectral_init = spectral_layout(
             data=None,
