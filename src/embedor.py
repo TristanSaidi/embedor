@@ -229,6 +229,7 @@ class EmbedOR(object):
             affinities = affinities[self.subsample_indices[0], self.subsample_indices[1]]
             repulsions = repulsions[self.subsample_indices[0], self.subsample_indices[1]]
             n_pairs = self.subsample_indices.shape[1]
+            N = self.X.shape[0]
             Z = np.sum(affinities)
             self.gamma = (n_pairs - Z)/(Z*n_pairs)
         else:
