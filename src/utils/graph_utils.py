@@ -4,7 +4,7 @@ from sklearn import neighbors
 from src.ollivier_ricci import OllivierRicci
 import GraphRicciCurvature.FormanRicci as fr
 import pynndescent
-
+import time
 
 def compute_orc(G, nbrhood_size=1):
     """
@@ -134,24 +134,10 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     if type(A) != np.ndarray:
         A = A.toarray()
     A = np.maximum(A, A.T)
-    assert np.allclose(A, A.T), "The adjacency matrix is not symmetric."
-    # convert to networkx graph and symmetrize A
-    n_points = X.shape[0]
-    nodes = set()
-    G = nx.Graph()
-    for i in range(n_points):
-        G.add_node(i)
-        G.nodes[i]['pos'] = X[i] # store the position of the node
-        for j in range(i+1, n_points):
-            if A[i, j] > 0:
-                G.add_edge(i, j, weight=A[i, j]) # weight is the euclidean distance
-                nodes.add(i)
-                nodes.add(j)
-                # add unweighted entry in dict
-                G[i][j]['unweighted'] = 1
-
-    assert G.is_directed() == False, "The graph is directed."
-    assert len(G.nodes()) == n_points, "The graph has isolated nodes."
+    
+    G = nx.from_numpy_array(A)
+    nx.set_node_attributes(G, X, 'pos')
+    nx.set_node_attributes(G, 1, 'unweighted')
     return G, A
 
 
