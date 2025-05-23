@@ -31,7 +31,9 @@ class EmbedOR(object):
             dim=2,
             verbose=False,
             seed=10,
-            edge_weight='orc'
+            edge_weight='orc',
+            subsample=False,
+            subsample_factor=0.05,
         ):
 
         """ 
@@ -57,7 +59,9 @@ class EmbedOR(object):
             self.k_max = energy_params['k_max']
             self.k_min = energy_params['k_min']
             self.k_crit = energy_params['k_crit']
-
+        # whether or not to subsample interactions
+        self.subsample = subsample
+        self.subsample_factor = subsample_factor
         self.exp_params = {
             'mode': 'descent',
             'n_neighbors': self.k,
@@ -89,6 +93,30 @@ class EmbedOR(object):
         self._compute_affinities()
         print("Updating the graph attributes...")
         self.fitted = True
+        if self.subsample:
+            self._subsample_interactions()
+
+    def _subsample_interactions(self):
+        """
+        Subsample the interactions.
+        """
+        time_start = time.time()
+        # start with pairs from knn graph
+        self.subsample_indices = np.stack(self.knn_indices)
+        # now randomly sample from all of remaining O(n^2) pairs
+        total_pairs = self.A.shape[0] * (self.A.shape[0] - 1) / 2
+        n_samples = int(total_pairs * self.subsample_factor)
+        random_pairs = np.random.randint(0, total_pairs, n_samples)
+        # get the indices of the sampled pairs
+        random_pairs_indices = np.unravel_index(random_pairs, self.A.shape)
+        random_pairs_indices = np.stack(random_pairs_indices)
+        assert random_pairs_indices.shape[0] == self.subsample_indices.shape[0]
+        # subsume
+        self.subsample_indices = np.concatenate((self.subsample_indices, random_pairs_indices), axis=1)
+        # make sure we have unique pairs
+        self.subsample_indices = np.unique(self.subsample_indices, axis=1)
+        time_end = time.time()
+        print(f"Time taken to subsample interactions: {time_end - time_start:.2f} seconds")
 
     def _build_nnG(self):
         """
@@ -122,8 +150,10 @@ class EmbedOR(object):
 
         self.G = return_dict['G']
         self.A = nx.to_numpy_array(self.G, weight='weight', nodelist=list(range(len(self.G.nodes()))))
-        self.edge_mask = np.where(self.A > 0, 1, 0)
-
+        # get knn indices
+        if self.subsample:
+            A_ut = self.A * np.triu(np.ones(self.A.shape), k=1)
+            self.knn_indices =  A_ut.nonzero()
 
     def _compute_distances(self, max_val=np.inf):
         # compute energy for each edge
@@ -154,14 +184,15 @@ class EmbedOR(object):
         indices = list(self.G.nodes())
         inverse_indices = [indices.index(i) for i in range(len(indices))]
         self.apsp = self.apsp[inverse_indices, :][:, inverse_indices]
+        assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symmetric."
+
         time_end = time.time()
         print(f"Time taken to compute distances: {time_end - time_start:.2f} seconds")    
-        
-        assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symmetric."
 
     def _compute_affinities(self):
         time_start = time.time()
         self.all_affinities = squareform(joint_probabilities(self.apsp, desired_perplexity=self.perplexity, verbose=0))
+        del self.apsp
 
         # symmetrize affinities
         self.all_affinities = (self.all_affinities + self.all_affinities.T) / 2
@@ -194,15 +225,25 @@ class EmbedOR(object):
 
     def _layout(self, affinities, repulsions):
         time_start = time.time()
+        if self.subsample:
+            affinities = affinities[self.subsample_indices[0], self.subsample_indices[1]]
+            repulsions = repulsions[self.subsample_indices[0], self.subsample_indices[1]]
+            n_pairs = self.subsample_indices.shape[1]
+            Z = np.sum(affinities)
+            self.gamma = (n_pairs - Z)/(Z*n_pairs)
+        else:
+            # compute gamma
+            N = self.X.shape[0]
+            npairs = (N**2 -N)/2
+            Z = (np.sum(affinities) - np.trace(affinities))/2
+            self.gamma = (npairs - Z)/(Z*N**2)
+            self.subsample_indices = None
         # how many epochs to SKIP for each sample
         self.epochs_per_pair_positive = make_epochs_per_pair(affinities, n_epochs=self.epochs)
         self.epochs_per_pair_negative = make_epochs_per_pair(repulsions, n_epochs=self.epochs)
-        # compute gamma
-        N = self.X.shape[0]
-        npairs = (N**2 -N)/2
-        Z = (np.sum(affinities) - np.trace(affinities))/2
-        self.gamma = (npairs - Z)/(Z*N**2)
+        
         self.embedding = optimize_layout_euclidean(
+            self.subsample_indices,
             self.embedding, 
             n_epochs=self.epochs,
             epochs_per_positive_sample=self.epochs_per_pair_positive,
@@ -236,11 +277,3 @@ class EmbedOR(object):
         plt.scatter(spectral_init[:, 0], spectral_init[:, 1], c='r', s=10)
         plt.scatter(emb[:, 0], emb[:, 1], c='b', s=10)
         plt.legend(["Spectral Init", "Final Embedding"])
-
-    def plot_apsp(self):
-        plt.figure()
-        plt.hist(self.apsp.flatten(), bins=100)
-        plt.title("APSP Energy Distribution")
-        plt.xlabel("APSP Energy")
-        plt.ylabel("Count")
-        plt.show()

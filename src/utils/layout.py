@@ -70,6 +70,7 @@ def clip(val):
         return val
 
 def _optimize_layout_euclidean_single_epoch(
+    subsample_indices, # unused in this function
     embedding,
     epochs_per_positive_sample,
     epochs_per_negative_sample,
@@ -145,18 +146,101 @@ def _optimize_layout_euclidean_single_epoch(
     
     return attractive_loss, repulsive_loss
 
+
+def _optimize_layout_euclidean_single_epoch_subsampled(
+    subsample_indices,
+    embedding,
+    epochs_per_positive_sample,
+    epochs_per_negative_sample,
+    gamma,
+    dim,
+    alpha,
+    epoch_of_next_positive_sample,
+    epoch_of_next_negative_sample,
+    n,
+):
+    attractive_loss = 0.0
+    repulsive_loss = 0.0
+    # iterate through each pairwise interaction in our graph
+    for idx in numba.prange(subsample_indices.shape[1]):
+        
+        i = subsample_indices[0][idx]
+        j = subsample_indices[1][idx]
+        # current implementation: epoch_of_next_sample == epochs_per_sample (at the beginning)
+        # this gets triggered if the number of epochs exceeds the next time sample [i] should be updated
+        if epoch_of_next_positive_sample[idx] <= n:
+
+            current = embedding[i]
+            other = embedding[j]
+
+            dist_squared = rdist(current, other)
+
+            # compute the loss
+            f_ij = 1.0 / (1.0 + pow(dist_squared, 2.0))
+
+            attractive_loss += -log(f_ij)
+
+            if dist_squared > 0.0:
+                grad_coeff = -2.0 * 1.0 * 1.0 * pow(dist_squared, 1.0 - 1.0)
+                grad_coeff /= 1.0 * pow(dist_squared, 1.0) + 1.0
+            else:
+                grad_coeff = 0.0
+
+            for d in range(dim):
+                grad_d = grad_coeff * (current[d] - other[d])
+                current[d] += grad_d * alpha
+                other[d] += -grad_d * alpha
+
+            epoch_of_next_positive_sample[idx] += epochs_per_positive_sample[idx] # update sample i in [epochs_per_sample] epochs
+        
+        if epoch_of_next_negative_sample[idx] <= n:
+
+            current = embedding[i]
+            other = embedding[j]
+
+            dist_squared = rdist(current, other)
+
+            # compute the loss
+            f_ij = 1.0 / (1.0 + pow(dist_squared, 2.0))
+
+            repulsive_loss += -gamma * log(1+0.001-f_ij)
+
+            if dist_squared > 0.0:
+                grad_coeff = 2.0 * gamma * 1.0
+                grad_coeff /= (0.001 + dist_squared) * (
+                    1.0 * pow(dist_squared, 1.0) + 1
+                )
+            else:
+                grad_coeff = 0.0
+
+            for d in range(dim):
+                if grad_coeff > 0.0:
+                    grad_d = grad_coeff * (current[d] - other[d])
+                else:
+                    grad_d = 0
+                current[d] += grad_d * alpha
+            
+            epoch_of_next_negative_sample[idx] += epochs_per_negative_sample[idx] # update sample i in [epochs_per_sample] epochs
+
+    return attractive_loss, repulsive_loss
+
+
 _nb_optimize_layout_euclidean_single_epoch = numba.njit(
     _optimize_layout_euclidean_single_epoch, fastmath=True, parallel=True
 )
 
-def make_epochs_per_pair(weights, n_epochs, max_iter=None, min_iter=None):
+_nb_optimize_layout_euclidean_single_epoch_subsampled = numba.njit(
+    _optimize_layout_euclidean_single_epoch_subsampled, fastmath=True, parallel=True
+)
+
+def make_epochs_per_pair(weights, n_epochs):
     """Given a set of weights and number of epochs generate the number of
     epochs per sample for each weight.
 
     Parameters
     ----------
     weights: array of shape (n, n)
-        The weights of how much we wish to sample each 1-simplex.
+        The weights of how much we wish to sample each pair.
 
     n_epochs: int
         The total number of epochs we want to train for.
@@ -175,6 +259,7 @@ def make_epochs_per_pair(weights, n_epochs, max_iter=None, min_iter=None):
 
 
 def optimize_layout_euclidean(
+    subsample_indices,
     embedding,
     n_epochs,
     epochs_per_positive_sample,
@@ -192,7 +277,10 @@ def optimize_layout_euclidean(
 
     # Fix for calling UMAP many times for small datasets, otherwise we spend here
     # a lot of time in compilation step (first call to numba function)
-    optimize_fn = _nb_optimize_layout_euclidean_single_epoch
+    if subsample_indices is not None:
+        optimize_fn = _nb_optimize_layout_euclidean_single_epoch_subsampled
+    else:
+        optimize_fn = _nb_optimize_layout_euclidean_single_epoch
 
 
     epochs_list = None
@@ -205,6 +293,7 @@ def optimize_layout_euclidean(
     for n in range(n_epochs):
         # n := epoch
         attractive_loss, repulsive_loss = optimize_fn(
+            subsample_indices,
             embedding,
             epochs_per_positive_sample,
             epochs_per_negative_sample,
