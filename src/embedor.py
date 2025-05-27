@@ -5,6 +5,7 @@ from src.utils.graph_utils import *
 # # from src.utils.embeddings import *
 import numpy as np
 from src.utils.layout import *
+from src.plotting import plot_graph_2D
 from umap.spectral import spectral_layout
 from sklearn.manifold import SpectralEmbedding
 import scipy
@@ -135,7 +136,15 @@ class EmbedORBase(object):
             (u, v): self.all_affinities[u, v]
             for u, v in self.G.edges
         }
+        edge_dists = {
+            (u, v): self.apsp[u, v]
+            for u, v in self.G.edges
+        }
+        del self.apsp
         nx.set_edge_attributes(self.G, edge_affinities, 'affinity')
+        # convert to list of affinities
+        self.edge_affinities = list(edge_affinities.values())
+        self.edge_distances = list(edge_dists.values())
         time_end = time.time()
         print(f"Time taken to update graph attributes: {time_end - time_start:.2f} seconds")
 
@@ -200,7 +209,15 @@ class EmbedORBase(object):
         plt.scatter(emb[:, 0], emb[:, 1], c='b', s=10)
         plt.legend(["Spectral Init", "Final Embedding"])
 
-
+    def plot_low_energy_graph(self, edge_pctile=33):
+        self.G_low_energy = self.G.copy()
+        threshold = np.percentile(self.edge_distances, edge_pctile)
+        for idx,(u, v) in enumerate(self.G_low_energy.edges()):
+            if self.edge_distances[idx] > threshold:
+                self.G_low_energy.remove_edge(u, v)
+        # plot the graph
+        plot_graph_2D(self.embedding, self.G_low_energy, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+                      
     def _compute_affinities(self):
         """
         Compute the affinities for the graph.
@@ -373,7 +390,6 @@ class EmbedORFast(EmbedORBase):
         knn_dist = np.sort(self.apsp, axis=1)[:, self.k]
         sigmas = knn_dist / np.sqrt(np.log(1/p_des))
         self.all_affinities = np.exp(-self.apsp**2 / (sigmas[:, None]**2))
-        del self.apsp
 
         self.all_affinities = (self.all_affinities + self.all_affinities.T) / 2
         self.all_repulsions = 1 - self.all_affinities
