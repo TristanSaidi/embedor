@@ -2,8 +2,9 @@ import networkx as nx
 import numpy as np
 from sklearn import neighbors
 from src.ollivier_ricci import OllivierRicci
+import GraphRicciCurvature.FormanRicci as fr
 import pynndescent
-
+import time
 
 def compute_orc(G, nbrhood_size=1):
     """
@@ -27,6 +28,31 @@ def compute_orc(G, nbrhood_size=1):
     return {
         'G': orc.G,
         'orcs': orcs,
+    }
+
+
+def compute_frc(G):
+    """
+    Compute the Forman-Ricci curvature on edges of a graph.
+    Parameters
+    ----------
+    G : networkx.Graph
+        The graph.
+    nbrhood_size : int, optional
+        Number of hops to consider for neighborhood.
+    Returns
+    -------
+    G : networkx.Graph
+        The graph with the Forman-Ricci curvatures as edge attributes.
+    """
+    frc = fr.FormanRicci(G, weight='unweighted')
+    frc.compute_ricci_curvature()
+    frcs = []
+    for i, j, _ in frc.G.edges(data=True):
+        frcs.append(frc.G[i][j]['formanCurvature'])
+    return {
+        'G': frc.G,
+        'frcs': frcs,
     }
 
 
@@ -81,10 +107,17 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
         assert epsilon is not None, "epsilon must be specified when mode='eps'."
         A = neighbors.radius_neighbors_graph(X, radius=epsilon, mode='distance')
     elif mode == 'descent':
+        n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
+        n_iters = max(5, int(round(np.log2(X.shape[0]))))
         knn_search_index = pynndescent.NNDescent(
             n_neighbors=n_neighbors,
             data=X,
+            n_trees=n_trees,
+            n_iters=n_iters,
+            max_candidates=60,
             metric='euclidean',
+            low_memory=True,
+            n_jobs=-1,
             verbose=False
         )
         indices, distances = knn_search_index.neighbor_graph
@@ -101,24 +134,10 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     if type(A) != np.ndarray:
         A = A.toarray()
     A = np.maximum(A, A.T)
-    assert np.allclose(A, A.T), "The adjacency matrix is not symmetric."
-    # convert to networkx graph and symmetrize A
-    n_points = X.shape[0]
-    nodes = set()
-    G = nx.Graph()
-    for i in range(n_points):
-        G.add_node(i)
-        G.nodes[i]['pos'] = X[i] # store the position of the node
-        for j in range(i+1, n_points):
-            if A[i, j] > 0:
-                G.add_edge(i, j, weight=A[i, j]) # weight is the euclidean distance
-                nodes.add(i)
-                nodes.add(j)
-                # add unweighted entry in dict
-                G[i][j]['unweighted'] = 1
-
-    assert G.is_directed() == False, "The graph is directed."
-    assert len(G.nodes()) == n_points, "The graph has isolated nodes."
+    
+    G = nx.from_numpy_array(A)
+    nx.set_node_attributes(G, X, 'pos')
+    nx.set_node_attributes(G, 1, 'unweighted')
     return G, A
 
 
