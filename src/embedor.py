@@ -361,6 +361,9 @@ class EmbedORFast(EmbedORBase):
         self.subsample_indices = np.concatenate((self.subsample_indices, random_pairs_indices), axis=1)
         # make sure we have unique pairs
         self.subsample_indices = np.unique(self.subsample_indices, axis=1)
+        # remove pairs (i, i) from the subsample
+        loop_indices = np.where(self.subsample_indices[0] == self.subsample_indices[1])[0]
+        self.subsample_indices = np.delete(self.subsample_indices, loop_indices, axis=1)
         time_end = time.time()
         print(f"Time taken to subsample interactions: {time_end - time_start:.2f} seconds")
 
