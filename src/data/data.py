@@ -3,14 +3,12 @@ from src.data.manifold import *
 import numpy as np
 import torchvision
 import torch
-import os
 
-ROOT_DIR = os.getenv("PYTHONPATH")
-DATA_DIR = os.path.join(ROOT_DIR, "data")
+DATA_DIR = "/home/tristan/Research/Fa24/isorc/data/"
 
 # Data generation functions
 
-def concentric_circles(n_points, factor, noise, supersample=False, supersample_factor=2.5, noise_thresh=0.275, dim=2):
+def concentric_circles(n_points, factor, noise, noise_thresh=0.275, dim=2):
     """ 
     Generate concentric circles with noise. 
     Parameters
@@ -37,19 +35,10 @@ def concentric_circles(n_points, factor, noise, supersample=False, supersample_f
         subsample_indices : list
             The indices of the subsampled circles.
     """
-    if supersample:
-        N_total = int(n_points * supersample_factor)
-        subsample_indices = np.random.choice(N_total, n_points, replace=False)
-    else:
-        N_total = n_points
-        subsample_indices = None
+
+    N_total = n_points
+    subsample_indices = None
     circles, cluster, geodesic_distances = make_circles(n_samples=N_total, factor=factor)
-    if supersample:
-        circles_supersample = circles.copy()
-        circles = circles[subsample_indices]
-        cluster = cluster[subsample_indices]
-    else:
-        circles_supersample = None
     # if dim = 3, add a third dimension of zeros
     if dim == 3:
         circles = np.concatenate([circles, np.zeros((circles.shape[0], 1))], axis=1)
@@ -60,13 +49,12 @@ def concentric_circles(n_points, factor, noise, supersample=False, supersample_f
         while len(resample_indices) > 0:
             z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
             resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
-    circles += z
+    noisy_circles = circles.copy() + z
 
     return_dict = {
-        'data': circles,
+        'data': noisy_circles,
         'cluster': cluster,
-        'data_supersample': circles_supersample,
-        'subsample_indices': subsample_indices,
+        'noiseless_data': circles,
         'geodesic_distances': geodesic_distances
     }
     return return_dict
@@ -133,7 +121,7 @@ def quadratics(n_points, noise, supersample=False, supersample_factor=2.5, noise
     return return_dict
 
 
-def moons(n_points, noise, supersample=False, supersample_factor=2.5, noise_thresh=0.275):
+def moons(n_points, noise, noise_thresh=0.275):
     """
     Generate a moons dataset.
     Parameters
@@ -154,19 +142,9 @@ def moons(n_points, noise, supersample=False, supersample_factor=2.5, noise_thre
         subsample_indices : list
             The indices of the subsampled moons.
     """
-    if supersample:
-        N_total = int(n_points * supersample_factor)
-        subsample_indices = np.random.choice(N_total, n_points, replace=False)
-    else:
-        N_total = n_points
-        subsample_indices = None
+
+    N_total = n_points
     moons, cluster = datasets.make_moons(n_samples=N_total, noise=0.0)
-    if supersample:
-        moons_supersample = moons.copy()
-        moons = moons[subsample_indices]
-        cluster = cluster[subsample_indices]
-    else:
-        moons_supersample = None
 
     # clip noise and resample if necessary
     z =  noise*np.random.randn(*moons.shape)
@@ -175,17 +153,16 @@ def moons(n_points, noise, supersample=False, supersample_factor=2.5, noise_thre
         while len(resample_indices) > 0:
             z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
             resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
-    moons += z
+    noisy_moons = moons.copy() + z
 
     return_dict = {
-        'data': moons,
+        'data': noisy_moons,
         'cluster': cluster,
-        'data_supersample': moons_supersample,
-        'subsample_indices': subsample_indices
+        'noiseless_data': moons,
     }
     return return_dict
 
-def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5, noise_thresh=0.275, hole=False, double=False):
+def swiss_roll(n_points, noise, dim=3, noise_thresh=0.275, hole=False, double=False):
     """
     Generate a Swiss roll dataset.
     Parameters
@@ -204,16 +181,11 @@ def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5
         dim: int
             The dimension of the Swiss roll.
     """
-    if supersample:
-        N_total = int(n_points * supersample_factor)
-        subsample_indices = np.random.choice(N_total, n_points, replace=False)
-    else:
-        N_total = n_points
-        subsample_indices = None
-    swiss_roll, t, y = make_swiss_roll(N_total, hole=hole)
+
+    swiss_roll, t, y = make_swiss_roll(n_points, hole=hole)
     cluster = None
     if double:
-        swiss_roll2, _, _ = make_swiss_roll(N_total, hole=hole)
+        swiss_roll2, _, _ = make_swiss_roll(n_points, hole=hole)
         # scale slightly
         swiss_roll2 = swiss_roll2 * 0.75
         swiss_roll = np.concatenate([swiss_roll, swiss_roll2], axis=0)
@@ -229,14 +201,6 @@ def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5
     
     if dim == 2:
         swiss_roll = swiss_roll[:, [0, 2]]
-    if supersample:
-        swiss_roll_supersample = swiss_roll.copy()
-        swiss_roll = swiss_roll[subsample_indices]
-        color = color[subsample_indices]
-    else:
-        swiss_roll_supersample = None
-        subsample_indices = None
-
     # clip noise and resample if necessary
     z =  noise*np.random.randn(*swiss_roll.shape)
     if noise_thresh is not None:
@@ -244,15 +208,14 @@ def swiss_roll(n_points, noise, dim=3, supersample=False, supersample_factor=1.5
         while len(resample_indices) > 0:
             z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
             resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
-    swiss_roll += z
+    noisy_swiss_roll = swiss_roll.copy() + z
 
     return_dict = {
-        'data': swiss_roll,
+        'data': noisy_swiss_roll,
         'cluster': cluster,
         'color': color,
         'geodesic_distances': distances,
-        'data_supersample': swiss_roll_supersample,
-        'subsample_indices': subsample_indices,
+        'noiseless_data': swiss_roll,
         'coordinates': coordinates
     }
     return return_dict
@@ -380,7 +343,7 @@ def cassini(n_points, noise, supersample=False, supersample_factor=2.5, noise_th
     return return_dict
 
 
-def torus(n_points, noise, r=1.5, R=5, double=False, supersample=False, supersample_factor=2.5, noise_thresh=0.275):
+def torus(n_points, noise, r=1.5, R=5, double=False,  noise_thresh=0.275):
     """
     Generate a 2-torus dataset.
     Parameters
@@ -404,7 +367,7 @@ def torus(n_points, noise, r=1.5, R=5, double=False, supersample=False, supersam
     """
     if double and R <= 2*r:
         raise Warning("Double torii will intersect")
-    torus, thetas, cluster, torus_subsample, subsample_indices = Torus.sample(N=n_points, r=r, R=R, double=double, supersample=supersample, supersample_factor=supersample_factor)
+    torus, thetas, cluster, torus_subsample, subsample_indices = Torus.sample(N=n_points, r=r, R=R, double=double, supersample=False, supersample_factor=1)
     color = Torus.exact_curvatures(thetas, r, R)
     color = np.array(color)
     
@@ -415,14 +378,13 @@ def torus(n_points, noise, r=1.5, R=5, double=False, supersample=False, supersam
         while len(resample_indices) > 0:
             z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
             resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
-    torus += z
-    
+    noisy_torus = torus.copy() + z  
+
     return_dict = {
-        'data': torus,
+        'data': noisy_torus,
         'cluster': cluster,
         'color': color,
-        'data_supersample': torus_subsample,
-        'subsample_indices': subsample_indices
+        'noiseless_data': torus,
     }
     return return_dict
 
@@ -813,13 +775,13 @@ def gen_dla(
         M = np.concatenate([M, new_branch + M[ind, :]])
 
     noise = np.random.normal(0, sigma, M.shape)
-    M = M + noise
+    noisy_M = M + noise
 
     # returns the group labels for each point to make it easier to visualize
     # embeddings
     C = np.array([i // branch_length for i in range(n_branch * branch_length)])
 
-    return M, C
+    return noisy_M, M
 
 
 import scprep
@@ -891,41 +853,3 @@ def get_developmental_data(n_points):
     days = days[random_indices]
 
     return X, days
-
-
-def get_chimp_data(n_points):
-    
-    # Path to input files
-    data_path = DATA_DIR+'chimp/chimp.data.npy'
-    labels_path = DATA_DIR+'chimp/chimp.labels.npy'
-
-    data = np.load(data_path)
-    labels = np.load(labels_path)
-
-    # subsample data
-    if n_points < data.shape[0]:
-        random_indices = np.random.choice(data.shape[0], n_points, replace=False)
-        data = data[random_indices, :]
-        labels = labels[random_indices]
-    return data, labels
-
-def get_macosko_data(n_points):
-    import gzip
-    import pickle
-    data_path = DATA_DIR+'macosko/macosko_2015.pkl.gz'
-    with gzip.open(data_path, 'rb') as f:
-        data_and_labels = pickle.load(f)
-    # get 50 pcs
-    data = data_and_labels['pca_50']
-    y_str = data_and_labels['CellType1']
-    y_int = np.zeros(y_str.shape)
-    # convert to int
-    for i, label in enumerate(np.unique(y_str)):
-        y_int[y_str == label] = i
-    # subsample data
-    if n_points < data.shape[0]:
-        random_indices = np.random.choice(data.shape[0], n_points, replace=False)
-        data = data[random_indices, :]
-        y_int = y_int[random_indices]
-    return data, y_int
-    
