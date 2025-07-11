@@ -122,7 +122,7 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     return G, A
 
 
-def low_energy_edge_stats(embdng, full_graph, low_energy_graph, pctg=1.0):
+def low_energy_edge_stats(embdng, full_graph, low_energy_graph, frac=1.0):
     # find average edge distance for original graph in embedding space
     distances = np.zeros(len(full_graph.edges()))
     for idx, (i, j) in enumerate(full_graph.edges()):
@@ -139,8 +139,8 @@ def low_energy_edge_stats(embdng, full_graph, low_energy_graph, pctg=1.0):
         dist = np.linalg.norm(embdng[i] - embdng[j])
         z_scores[idx] = (dist - avg_distance) / std_distance
     z_scores_sorted = np.sort(z_scores)
-    # return mean and std of top 10% of z-scores
-    top_z_scores = z_scores_sorted[-int(len(z_scores) * pctg):]
+    # return mean and std of top {100*pctg}% of z-scores
+    top_z_scores = z_scores_sorted[-int(len(z_scores) * frac):]
     mean_z_score = np.mean(top_z_scores)
     std_z_score = np.std(top_z_scores)
-    return mean_z_score, std_z_score
+    return mean_z_score, std_z_score, z_scores_sorted, z_scores
