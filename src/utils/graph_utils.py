@@ -3,6 +3,7 @@ import numpy as np
 from sklearn import neighbors
 from src.ollivier_ricci import OllivierRicci
 import pynndescent
+import tqdm
 
 
 def compute_orc(G, nbrhood_size=1):
@@ -122,7 +123,7 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     return G, A
 
 
-def low_energy_edge_stats(embdng, full_graph, low_energy_graph, frac=1.0):
+def low_energy_edge_stats(embdng, full_graph, low_energy_graph):
     # find average edge distance for original graph in embedding space
     distances = np.zeros(len(full_graph.edges()))
     for idx, (i, j) in enumerate(full_graph.edges()):
@@ -138,9 +139,26 @@ def low_energy_edge_stats(embdng, full_graph, low_energy_graph, frac=1.0):
     for idx, (i, j) in enumerate(low_energy_graph.edges()):
         dist = np.linalg.norm(embdng[i] - embdng[j])
         z_scores[idx] = (dist - avg_distance) / std_distance
-    z_scores_sorted = np.sort(z_scores)
     # return mean and std of top {100*pctg}% of z-scores
-    top_z_scores = z_scores_sorted[-int(len(z_scores) * frac):]
-    mean_z_score = np.mean(top_z_scores)
-    std_z_score = np.std(top_z_scores)
-    return mean_z_score, std_z_score, z_scores_sorted, z_scores
+    mean_z_score = np.mean(z_scores)
+    std_z_score = np.std(z_scores)
+    return mean_z_score, std_z_score, z_scores
+
+def low_distance_edge_stats(embdng, full_graph, apsp, frac=0.33):
+    # find average edge distance for original graph in embedding space
+    distances = np.zeros(len(full_graph.edges()))
+    energy = np.zeros(len(full_graph.edges()))
+    for idx, (i, j) in enumerate(full_graph.edges()):
+        dist = np.linalg.norm(embdng[i] - embdng[j])
+        distances[idx] = dist
+        energy[idx] = apsp[i, j]
+    z_scored_energies = (energy - np.mean(energy)) / np.std(energy)
+    # take lowest frac*100% of edges with respect to energy
+    sorted_indices = np.argsort(distances)
+    bottom_indices = sorted_indices[:int(len(sorted_indices) * frac)]
+    # get z scores of energies for these edges
+    bottom_z_scores = z_scored_energies[bottom_indices]
+    # return mean and std of top {100*pctg}% of z-scores
+    mean_z_score = np.mean(bottom_z_scores)
+    std_z_score = np.std(bottom_z_scores)
+    return mean_z_score, std_z_score, bottom_z_scores
