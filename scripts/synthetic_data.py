@@ -95,7 +95,7 @@ def synthetic_data(n_points):
 
     noise = 0
     noise_thresh = None
-    return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh, supersample=False)
+    return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh)
 
     # apply a rotation by 45 degrees about the z-axis and a rotation by 45 degrees about the x-axis
     zrot = 0
