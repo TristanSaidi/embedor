@@ -46,8 +46,8 @@ def synthetic_data(n_points):
     plt.savefig(os.path.join(circles_path, 'embedor.png'), dpi=1200)
     plt.close()
 
-    print("Running EmbedOR with isomap metric...")
-    embedor = EmbedOR(exp_params, metric='euclidean')
+    print("Running EmbedOR with isomap edge_weight...")
+    embedor = EmbedOR(exp_params, edge_weight='euclidean')
     embedding = embedor.fit_transform(return_dict['data'])
     plt.figure(figsize=(10, 10))
     plot_data_2D(embedding, color=None, title=None, node_size=1.5)
@@ -115,7 +115,7 @@ def synthetic_data(n_points):
 
     noise = 1
     noise_thresh = None
-    return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh, supersample=False)
+    return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh)
     
     print("Running EmbedOR...")
     embedor = EmbedOR(exp_params)
@@ -125,8 +125,8 @@ def synthetic_data(n_points):
     plt.savefig(os.path.join(swiss_roll_path, 'embedor.png'), dpi=1200)
     plt.close()
 
-    print("Running EmbedOR with isomap metric...")
-    embedor = EmbedOR(exp_params, metric='euclidean')
+    print("Running EmbedOR with isomap edge_weight...")
+    embedor = EmbedOR(exp_params, edge_weight='euclidean')
     embedding = embedor.fit_transform(return_dict['data'])
     plt.figure(figsize=(10, 10))
     plot_data_2D(embedding, color=None, title=None, node_size=1.5)
@@ -176,7 +176,7 @@ def synthetic_data(n_points):
     noise_thresh = None
 
     print("Running torus...")
-    return_dict = torus(n_points=n_points, noise=noise, noise_thresh=noise_thresh, supersample=False, double=True)
+    return_dict = torus(n_points=n_points, noise=noise, noise_thresh=noise_thresh, double=True)
     plot_data_2D(return_dict['data'], color=None, title=None)
     plt.savefig(os.path.join(save_path, 'torus.png'), dpi=1200)
     plt.close()
@@ -189,8 +189,8 @@ def synthetic_data(n_points):
     plt.savefig(os.path.join(tori_path, 'embedor.png'), dpi=1200)
     plt.close()
 
-    print("Running EmbedOR with isomap metric...")
-    embedor = EmbedOR(exp_params, metric='euclidean')
+    print("Running EmbedOR with isomap edge_weight...")
+    embedor = EmbedOR(exp_params, edge_weight='euclidean')
     embedding = embedor.fit_transform(return_dict['data'])
     plt.figure(figsize=(10, 10))
     plot_data_2D(embedding, color=None, title=None, node_size=1.5)
@@ -245,8 +245,8 @@ def synthetic_data(n_points):
     plt.savefig(os.path.join(tree_path, 'embedor.png'), dpi=1200)
     plt.close()
 
-    print("Running EmbedOR with isomap metric...")
-    embedor = EmbedOR(exp_params, metric='euclidean')
+    print("Running EmbedOR with isomap edge_weight...")
+    embedor = EmbedOR(exp_params, edge_weight='euclidean')
     embedding = embedor.fit_transform(X)
     plt.figure(figsize=(10, 10))
     plot_data_2D(embedding, color=None, title=None, node_size=1.5)
@@ -289,7 +289,7 @@ def synthetic_data(n_points):
     plt.close()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Evaluate the metric.")
+    parser = argparse.ArgumentParser(description="Evaluate the edge_weight.")
     parser.add_argument("--n_points", type=int, default=5000, help="Number of points to generate.")
     parser.add_argument("--seed", type=int, default=0, help="Random seed.")
     args = parser.parse_args()
