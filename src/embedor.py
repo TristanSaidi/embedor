@@ -159,13 +159,13 @@ class EmbedOR(object):
         indices = list(self.G.nodes())
         inverse_indices = [indices.index(i) for i in range(len(indices))]
         self.apsp = self.apsp[inverse_indices, :][:, inverse_indices]
-        assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symedge_weight."
+        assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symmetric."
 
     def _landmark_apsp(self):
         # algorithm from Potamias et. al. https://www.francescobonchi.com/paper_7.pdf
         # sort nodes by degree
-        if self.n_landmarks > self.X.shape[0]/10:
-            raise ValueError("Number of landmarks should be small, otherwise exact APSP call is quicker.")
+        # if self.n_landmarks > self.X.shape[0]/10:
+            # raise Warning("Number of landmarks should be small, otherwise exact APSP call is quicker.")
         betweenness = nk.centrality.ApproxBetweenness(self.G_nk).run().ranking() # returns list of tuples (node, betweenness)
         landmark_indices_tuple = betweenness[:self.n_landmarks]  # take the top n_landmark
         self.landmark_indices = [node for node, _ in landmark_indices_tuple]
@@ -176,11 +176,8 @@ class EmbedOR(object):
             for j in range(self.n_landmarks):
                     X_emb[i, j] = nk_obj.getDistance(i, self.landmark_indices[j])
 
-        L = scipy.spatial.distance_matrix(X_emb, X_emb, p=np.inf)
+        L = scipy.spatial.distance_matrix(X_emb, X_emb, p=np.inf) # lower bound estimator
         apsp = L
-        indices = list(self.G.nodes())
-        inverse_indices = [indices.index(i) for i in range(len(indices))]
-        apsp = apsp[inverse_indices, :][:, inverse_indices]
         # fill diag with 0
         np.fill_diagonal(apsp, 0)
         self.apsp = apsp
