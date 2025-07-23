@@ -8,6 +8,8 @@ from src.utils.layout import *
 from umap.spectral import spectral_layout
 from sklearn.metrics import pairwise_distances
 from scipy.sparse import csr_matrix
+from scipy.spatial.distance import pdist, squareform
+
 
 import scipy
 import networkit as nk
@@ -28,7 +30,8 @@ class EmbedOR(object):
             seed=10,
             edge_weight='orc',
             subsample=False,
-            subsample_factor=0.05
+            subsample_factor=0.05,
+            n_landmarks=None
         ):
 
         """ 
@@ -59,6 +62,7 @@ class EmbedOR(object):
         self.fitted = False
         self.subsample = subsample
         self.subsample_factor = subsample_factor
+        self.n_landmarks = n_landmarks
 
     def fit_transform(self, X=None):
         if not self.fitted:
@@ -147,13 +151,39 @@ class EmbedOR(object):
 
         else:
             self.G_nk = nk.nxadapter.nx2nk(self.G, weightAttr='weight')
-
-        self.apsp = nk.distance.APSP(self.G_nk).run().getDistances()
-        self.apsp = np.array(self.apsp)
+        if self.n_landmarks is not None: # landmark APSP
+            self._landmark_apsp()
+        else: # exact APSP
+            self.apsp = nk.distance.APSP(self.G_nk).run().getDistances()
+            self.apsp = np.array(self.apsp)
         indices = list(self.G.nodes())
         inverse_indices = [indices.index(i) for i in range(len(indices))]
         self.apsp = self.apsp[inverse_indices, :][:, inverse_indices]
         assert np.allclose(self.apsp, self.apsp.T), "APSP matrix must be symedge_weight."
+
+    def _landmark_apsp(self):
+        # algorithm from Potamias et. al. https://www.francescobonchi.com/paper_7.pdf
+        # sort nodes by degree
+        if self.n_landmarks > self.X.shape[0]/10:
+            raise ValueError("Number of landmarks should be small, otherwise exact APSP call is quicker.")
+        betweenness = nk.centrality.ApproxBetweenness(self.G_nk).run().ranking() # returns list of tuples (node, betweenness)
+        landmark_indices_tuple = betweenness[:self.n_landmarks]  # take the top n_landmark
+        self.landmark_indices = [node for node, _ in landmark_indices_tuple]
+        print(f"Selected landmark indices.")
+        nk_obj = nk.distance.APSP(self.G_nk).run()
+        X_emb = np.zeros((self.X.shape[0], self.n_landmarks))
+        for i in range(self.X.shape[0]):
+            for j in range(self.n_landmarks):
+                    X_emb[i, j] = nk_obj.getDistance(i, self.landmark_indices[j])
+
+        L = scipy.spatial.distance_matrix(X_emb, X_emb, p=np.inf)
+        apsp = L
+        indices = list(self.G.nodes())
+        inverse_indices = [indices.index(i) for i in range(len(indices))]
+        apsp = apsp[inverse_indices, :][:, inverse_indices]
+        # fill diag with 0
+        np.fill_diagonal(apsp, 0)
+        self.apsp = apsp
 
     def _compute_affinities(self):
         from scipy.spatial.distance import squareform     
