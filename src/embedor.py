@@ -170,12 +170,8 @@ class EmbedOR(object):
         landmark_indices_tuple = betweenness[:self.n_landmarks]  # take the top n_landmark
         self.landmark_indices = [node for node, _ in landmark_indices_tuple]
         print(f"Selected landmark indices.")
-        nk_obj = nk.distance.APSP(self.G_nk).run()
-        X_emb = np.zeros((self.X.shape[0], self.n_landmarks))
-        for i in range(self.X.shape[0]):
-            for j in range(self.n_landmarks):
-                    X_emb[i, j] = nk_obj.getDistance(i, self.landmark_indices[j])
-
+        nk_obj = nk.distance.SPSP(self.G_nk, self.landmark_indices).run()
+        X_emb = np.array(nk_obj.run().getDistances()).T
         L = scipy.spatial.distance_matrix(X_emb, X_emb, p=np.inf) # lower bound estimator
         apsp = L
         # fill diag with 0
