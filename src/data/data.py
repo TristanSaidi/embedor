@@ -121,7 +121,7 @@ def quadratics(n_points, noise, supersample=False, supersample_factor=2.5, noise
     return return_dict
 
 
-def moons(n_points, noise, noise_thresh=0.275):
+def moons(n_points, noise, noise_thresh=0.275, sep=0.5, width=1, dim=2):
     """
     Generate a moons dataset.
     Parameters
@@ -144,7 +144,28 @@ def moons(n_points, noise, noise_thresh=0.275):
     """
 
     N_total = n_points
-    moons, cluster = datasets.make_moons(n_samples=N_total, noise=0.0)
+    # moons, cluster = datasets.make_moons(n_samples=N_total, noise=0.0)
+
+    n_samples_out = N_total // 2
+    n_samples_in = N_total - n_samples_out
+    
+    outer_circ_x = width * np.cos(np.linspace(0, np.pi, n_samples_out))
+    outer_circ_y = np.sin(np.linspace(0, np.pi, n_samples_out))
+    inner_circ_x = width * (1 - np.cos(np.linspace(0, np.pi, n_samples_in)))
+    inner_circ_y = 1 - np.sin(np.linspace(0, np.pi, n_samples_in)) - sep
+    if dim == 3:
+        # uniform over [-0.2, 0.2] for third dimension
+        outer_circ_z = 0.8 * (2 * np.random.rand(N_total) - 1)
+        moons = np.vstack(
+            [np.append(outer_circ_x, inner_circ_x), np.append(outer_circ_y, inner_circ_y), outer_circ_z]
+        ).T
+    else:
+        moons = np.vstack(
+            [np.append(outer_circ_x, inner_circ_x), np.append(outer_circ_y, inner_circ_y)]
+        ).T
+    cluster = np.hstack(
+        [np.zeros(n_samples_out, dtype=np.intp), np.ones(n_samples_in, dtype=np.intp)]
+    )
 
     # clip noise and resample if necessary
     z =  noise*np.random.randn(*moons.shape)
@@ -185,9 +206,25 @@ def swiss_roll(n_points, noise, dim=3, noise_thresh=0.275, hole=False, double=Fa
     swiss_roll, t, y = make_swiss_roll(n_points, hole=hole)
     cluster = None
     if double:
-        swiss_roll2, _, _ = make_swiss_roll(n_points, hole=hole)
-        # scale slightly
-        swiss_roll2 = swiss_roll2 * 0.75
+        swiss_roll2, t_2, _ = make_swiss_roll(n_points, hole=hole)
+        # # scale slightly
+        # swiss_roll2[:, 2] = swiss_roll2[:, 2] * 0.7
+        # swiss_roll2[:, 0] = swiss_roll2[:, 0] * 0.7
+        
+        # swiss_roll2[:, 2] += 0.5
+        # swiss_roll2[:, 0] += -0.4
+
+        # perturb each point along its normal vector
+        n_x = -t_2 * np.cos(t_2) + np.sin(t_2)
+        n_z = -t_2 * np.sin(t_2) - np.cos(t_2)
+        norm = np.sqrt(n_x**2 + n_z**2)
+        n_x /= norm
+        n_z /= norm
+        n_y = np.zeros_like(n_x)
+        normal = np.stack([n_x, n_y, n_z], axis=1)
+        perturbation = 3 * normal
+        swiss_roll2 += perturbation
+
         swiss_roll = np.concatenate([swiss_roll, swiss_roll2], axis=0)
         cluster = np.zeros(swiss_roll.shape[0])
         cluster[swiss_roll.shape[0]//2:] = 1

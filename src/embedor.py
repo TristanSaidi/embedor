@@ -24,7 +24,10 @@ ENERGY_PARAMS = {
 class EmbedOR(object):
     def __init__(
             self, 
-            exp_params = {}, 
+            exp_params = {
+                'mode': 'nbrs',
+                'n_neighbors': 15,
+            }, 
             dim=2,
             verbose=False,
             seed=10,
@@ -45,15 +48,18 @@ class EmbedOR(object):
         """
         self.dim = dim
         self.exp_params = exp_params
-        self.k = self.exp_params.get('n_neighbors', 15)
+        self.nn_mode = exp_params.get('mode', 'nbrs')
+        self.k = self.exp_params.get('n_neighbors', None)
+        self.epsilon = self.exp_params.get('epsilon', None)
         self.p = self.exp_params.get('p', 3)
         self.epochs = self.exp_params.get('epochs', 300)
         self.weighted = self.exp_params.get('weighted', True)
         self.perplexity = self.exp_params.get('perplexity', 150)
         self.edge_weight = edge_weight
         self.exp_params = {
-            'mode': 'nbrs',
+            'mode': self.nn_mode,
             'n_neighbors': self.k,
+            'epsilon': self.epsilon,
             'p': self.p,
         }
         self.verbose = verbose
