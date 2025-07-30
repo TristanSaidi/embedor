@@ -820,6 +820,40 @@ def gen_dla(
 
     return noisy_M, M
 
+def gen_tree(n_points=5000, ndim=100, sigma=0.01):
+    # choose random (unit) direction
+    u = np.random.randn(ndim)
+    u /= np.linalg.norm(u)
+    # generate n_points/5 time values in [0, 1]
+    t = np.random.rand(n_points // 5)
+    # generate n_points/5 points along the line in the direction of u
+    points = np.outer(t, u)
+    # point closest to zero is one root
+    root_idx_base = np.argmin(np.linalg.norm(points, axis=1))
+    # point furthest from zero is another root
+    root_idx_top = np.argmax(np.linalg.norm(points, axis=1))
+    # pick two new directions for both roots
+    u_base_1 = np.random.randn(ndim)
+    u_base_1 /= np.linalg.norm(u_base_1)
+    u_base_2 = np.random.randn(ndim)
+    u_base_2 /= np.linalg.norm(u_base_2)
+    u_top_1 = np.random.randn(ndim)
+    u_top_1 /= np.linalg.norm(u_top_1)
+    u_top_2 = np.random.randn(ndim)
+    u_top_2 /= np.linalg.norm(u_top_2)
+    # generate new points in the direction of the new directions stepping from the roots
+    points_base_1 = points[root_idx_base] + np.outer(np.linspace(0, 1, n_points // 5), u_base_1)
+    points_base_2 = points[root_idx_base] + np.outer(np.linspace(0, 1, n_points // 5), u_base_2)
+    points_top_1 = points[root_idx_top] + np.outer(np.linspace(0, 1, n_points // 5), u_top_1)
+    points_top_2 = points[root_idx_top] + np.outer(np.linspace(0, 1, n_points // 5), u_top_2)
+    # concatenate all points
+    points = np.concatenate([points, points_base_1, points_base_2, points_top_1, points_top_2], axis=0)
+    # add noise
+    noise = sigma * np.random.randn(*points.shape)
+    noisy_points = noise.copy() + points
+    return noisy_points, points
+
+
 
 import scprep
 import os

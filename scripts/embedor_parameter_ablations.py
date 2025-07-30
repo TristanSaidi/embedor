@@ -19,7 +19,7 @@ REPO_ROOT = os.getenv('PYTHONPATH')
 sns.set_theme()
 
 def benchmark_datasets(n_points):
-    save_path = f'{REPO_ROOT}/outputs/parameter_ablations'
+    save_path = f'{REPO_ROOT}/outputs/embedor_parameter_ablations'
     os.makedirs(save_path, exist_ok=True)
 
     from datetime import datetime

@@ -1,5 +1,6 @@
 from src.data.data import *
 from src.embedor import *
+from src.utils.orcmanl import ORCManL
 from src.plotting import *
 import pandas as pd
 import matplotlib
@@ -17,7 +18,8 @@ REPO_ROOT = os.getenv('PYTHONPATH')
 sns.set_theme()
 
 exp_params = {
-    'p': 3
+    'p': 3,
+    'n_neighbors': 15,
 }
 
 def synthetic_data(n_points):
@@ -61,11 +63,33 @@ def synthetic_data(n_points):
     plt.savefig(os.path.join(circles_path, 'umap.png'), dpi=1200)
     plt.close()
 
+    print("Running UMAP with ORCManL...")
+    orcmanl = ORCManL(verbose=True)
+    orcmanl.fit(return_dict['data'])
+    G_pruned_nk = nk.nxadapter.nx2nk(orcmanl.G_pruned)
+    apsp = nk.distance.APSP(G_pruned_nk).run().getDistances()
+    apsp = np.array(apsp)
+    # clamp to 1e10
+    apsp[apsp > 1e10] = 1e10
+    umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='precomputed').fit_transform(apsp)
+    plt.figure(figsize=(10, 10))
+    plot_data_2D(umap_emb, color=None, title=None, node_size=1.5)
+    plt.savefig(os.path.join(circles_path, 'umap_orcmanl.png'), dpi=1200)
+    plt.close()
+
+
     print("Running t-SNE...")
     tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300).fit_transform(return_dict['data'])
     plt.figure(figsize=(10, 10))
     plot_data_2D(tsne_emb, color=None, title=None, node_size=1.5)
     plt.savefig(os.path.join(circles_path, 'tsne.png'), dpi=1200)
+    plt.close()
+
+    print("Running t-SNE with ORCManL ...")
+    tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300, metric='precomputed', init='random').fit_transform(apsp)
+    plt.figure(figsize=(10, 10))
+    plot_data_2D(tsne_emb, color=None, title=None, node_size=1.5)
+    plt.savefig(os.path.join(circles_path, 'tsne_orcmanl.png'), dpi=1200)
     plt.close()
 
     print("Running PHATE...")
@@ -140,11 +164,32 @@ def synthetic_data(n_points):
     plt.savefig(os.path.join(swiss_roll_path, 'umap.png'), dpi=1200)
     plt.close()
 
+    print("Running UMAP with ORCManL...")
+    orcmanl = ORCManL(verbose=True)
+    orcmanl.fit(return_dict['data'])
+    G_pruned_nk = nk.nxadapter.nx2nk(orcmanl.G_pruned)
+    apsp = nk.distance.APSP(G_pruned_nk).run().getDistances()
+    apsp = np.array(apsp)
+    # clamp to 1e10
+    apsp[apsp > 1e10] = 1e10
+    umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='precomputed').fit_transform(apsp)
+    plt.figure(figsize=(10, 10))
+    plot_data_2D(umap_emb, color=None, title=None, node_size=1.5)
+    plt.savefig(os.path.join(swiss_roll_path, 'umap_orcmanl.png'), dpi=1200)
+    plt.close()
+
     print("Running t-SNE...")
     tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300).fit_transform(return_dict['data'])
     plt.figure(figsize=(10, 10))
     plot_data_2D(tsne_emb, color=None, title=None, node_size=1.5)
     plt.savefig(os.path.join(swiss_roll_path, 'tsne.png'), dpi=1200)
+    plt.close()
+
+    print("Running t-SNE with ORCManL ...")
+    tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300, metric='precomputed', init='random').fit_transform(apsp)
+    plt.figure(figsize=(10, 10))
+    plot_data_2D(tsne_emb, color=None, title=None, node_size=1.5)
+    plt.savefig(os.path.join(swiss_roll_path, 'tsne_orcmanl.png'), dpi=1200)
     plt.close()
 
     print("Running PHATE...")
@@ -204,11 +249,32 @@ def synthetic_data(n_points):
     plt.savefig(os.path.join(tori_path, 'umap.png'), dpi=1200)
     plt.close()
 
+    print("Running UMAP with ORCManL...")
+    orcmanl = ORCManL(verbose=True)
+    orcmanl.fit(return_dict['data'])
+    G_pruned_nk = nk.nxadapter.nx2nk(orcmanl.G_pruned)
+    apsp = nk.distance.APSP(G_pruned_nk).run().getDistances()
+    apsp = np.array(apsp)
+    # clamp to 1e10
+    apsp[apsp > 1e10] = 1e10
+    umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='precomputed').fit_transform(apsp)
+    plt.figure(figsize=(10, 10))
+    plot_data_2D(umap_emb, color=None, title=None, node_size=1.5)
+    plt.savefig(os.path.join(tori_path, 'umap_orcmanl.png'), dpi=1200)
+    plt.close()
+
     print("Running t-SNE...")
     tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300).fit_transform(return_dict['data'])
     plt.figure(figsize=(10, 10))
     plot_data_2D(tsne_emb, color=None, title=None, node_size=1.5)
     plt.savefig(os.path.join(tori_path, 'tsne.png'), dpi=1200)
+    plt.close()
+
+    print("Running t-SNE with ORCManL ...")
+    tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300, metric='precomputed', init='random').fit_transform(apsp)
+    plt.figure(figsize=(10, 10))
+    plot_data_2D(tsne_emb, color=None, title=None, node_size=1.5)
+    plt.savefig(os.path.join(tori_path, 'tsne_orcmanl.png'), dpi=1200)
     plt.close()
 
     print("Running PHATE...")
@@ -235,7 +301,7 @@ def synthetic_data(n_points):
     # tree
     tree_path = os.path.join(save_path, dt_string, 'tree')
     os.makedirs(tree_path, exist_ok=False)
-    X, _ = gen_dla(n_dim=100, n_branch=8, sigma=4, branch_length=500)
+    X, _ = gen_tree(n_points=n_points)
 
     print("Running tree...")
     embedor = EmbedOR(exp_params)
@@ -260,11 +326,32 @@ def synthetic_data(n_points):
     plt.savefig(os.path.join(tree_path, 'umap.png'), dpi=1200)
     plt.close()
 
+    print("Running UMAP with ORCManL...")
+    orcmanl = ORCManL(verbose=True)
+    orcmanl.fit(X)
+    G_pruned_nk = nk.nxadapter.nx2nk(orcmanl.G_pruned)
+    apsp = nk.distance.APSP(G_pruned_nk).run().getDistances()
+    apsp = np.array(apsp)
+    # clamp to 1e10
+    apsp[apsp > 1e10] = 1e10
+    umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='precomputed').fit_transform(apsp)
+    plt.figure(figsize=(10, 10))
+    plot_data_2D(umap_emb, color=None, title=None, node_size=1.5)
+    plt.savefig(os.path.join(tree_path, 'umap_orcmanl.png'), dpi=1200)
+    plt.close()
+
     print("Running t-SNE...")
     tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300).fit_transform(X)
     plt.figure(figsize=(10, 10))
     plot_data_2D(tsne_emb, color=None, title=None, node_size=1.5)
     plt.savefig(os.path.join(tree_path, 'tsne.png'), dpi=1200)
+    plt.close()
+
+    print("Running t-SNE with ORCManL ...")
+    tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300, metric='precomputed', init='random').fit_transform(apsp)
+    plt.figure(figsize=(10, 10))
+    plot_data_2D(tsne_emb, color=None, title=None, node_size=1.5)
+    plt.savefig(os.path.join(tree_path, 'tsne_orcmanl.png'), dpi=1200)
     plt.close()
 
     print("Running PHATE...")
