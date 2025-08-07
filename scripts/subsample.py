@@ -25,87 +25,88 @@ if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
 n_points = 5000
+n_iter = 10
 subsample_factors = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
 np.random.seed(42)
 
 
 
-# %%
-noise = 0.1
-noise_thresh = None
-return_dict = concentric_circles(n_points=n_points, factor=0.4, noise=noise, noise_thresh=noise_thresh)
+# # %%
+# noise = 0.1
+# noise_thresh = None
+# return_dict = concentric_circles(n_points=n_points, factor=0.4, noise=noise, noise_thresh=noise_thresh)
 
-emb_full = EmbedOR(subsample=False).fit_transform(return_dict['data'])
-emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(return_dict['data'])
-emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(return_dict['data'])
+# emb_full = EmbedOR(subsample=False).fit_transform(return_dict['data'])
+# emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(return_dict['data'])
+# emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(return_dict['data'])
 
-# %%
-plt.figure(figsize=(10, 6))
-plot_data_2D(emb_full, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_circles_full.png'), dpi=1200)
-plt.figure(figsize=(10, 6))
-plot_data_2D(emb_subsample, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_circles_subsample_05.png'), dpi=1200)
-plt.figure(figsize=(10, 6))
-plot_data_2D(emb_subsample_2, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_circles_subsample_01.png'), dpi=1200)
+# # %%
+# plt.figure(figsize=(10, 6))
+# plot_data_2D(emb_full, None, None)
+# plt.savefig(os.path.join(output_dir, 'emb_circles_full.png'), dpi=1200)
+# plt.figure(figsize=(10, 6))
+# plot_data_2D(emb_subsample, None, None)
+# plt.savefig(os.path.join(output_dir, 'emb_circles_subsample_05.png'), dpi=1200)
+# plt.figure(figsize=(10, 6))
+# plot_data_2D(emb_subsample_2, None, None)
+# plt.savefig(os.path.join(output_dir, 'emb_circles_subsample_01.png'), dpi=1200)
 
-# %%
-noise = 1
-noise_thresh = None
-return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh)
+# # %%
+# noise = 1
+# noise_thresh = None
+# return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh)
 
-emb_full = EmbedOR(subsample=False).fit_transform(return_dict['data'])
-emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(return_dict['data'])
-emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(return_dict['data'])
+# emb_full = EmbedOR(subsample=False).fit_transform(return_dict['data'])
+# emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(return_dict['data'])
+# emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(return_dict['data'])
 
-plt.figure(figsize=(10, 6))
-plot_data_2D(emb_full, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_full.png'), dpi=1200)
-plt.figure(figsize=(10, 6))
-plot_data_2D(emb_subsample, None, None) 
-plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_subsample_05.png'), dpi=1200)
-plt.figure(figsize=(10, 6))
-plot_data_2D(emb_subsample_2, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_subsample_01.png'), dpi=1200)
+# plt.figure(figsize=(10, 6))
+# plot_data_2D(emb_full, None, None)
+# plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_full.png'), dpi=1200)
+# plt.figure(figsize=(10, 6))
+# plot_data_2D(emb_subsample, None, None) 
+# plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_subsample_05.png'), dpi=1200)
+# plt.figure(figsize=(10, 6))
+# plot_data_2D(emb_subsample_2, None, None)
+# plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_subsample_01.png'), dpi=1200)
 
-# %%
-noise = 0.5
-noise_thresh = None
-return_dict = torus(n_points=n_points, noise=noise, noise_thresh=noise_thresh, double=True)
+# # %%
+# noise = 0.5
+# noise_thresh = None
+# return_dict = torus(n_points=n_points, noise=noise, noise_thresh=noise_thresh, double=True)
 
-emb_full = EmbedOR(subsample=False).fit_transform(return_dict['data'])
-emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(return_dict['data'])
-emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(return_dict['data'])
+# emb_full = EmbedOR(subsample=False).fit_transform(return_dict['data'])
+# emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(return_dict['data'])
+# emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(return_dict['data'])
 
-plt.figure(figsize=(10, 6))
-plot_data_2D(emb_full, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_torus_full.png'), dpi=1200)
-plt.figure(figsize=(10, 6))
-plot_data_2D(emb_subsample, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_torus_subsample_05.png'), dpi=1200)
-plt.figure(figsize=(10, 6))
-plot_data_2D(emb_subsample_2, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_torus_subsample_01.png'), dpi=1200)
+# plt.figure(figsize=(10, 6))
+# plot_data_2D(emb_full, None, None)
+# plt.savefig(os.path.join(output_dir, 'emb_torus_full.png'), dpi=1200)
+# plt.figure(figsize=(10, 6))
+# plot_data_2D(emb_subsample, None, None)
+# plt.savefig(os.path.join(output_dir, 'emb_torus_subsample_05.png'), dpi=1200)
+# plt.figure(figsize=(10, 6))
+# plot_data_2D(emb_subsample_2, None, None)
+# plt.savefig(os.path.join(output_dir, 'emb_torus_subsample_01.png'), dpi=1200)
 
-# %%
-noisy_tree, tree = gen_dla(n_dim=100, n_branch=8, sigma=4, branch_length=500)
+# # %%
+# noisy_tree, tree = gen_dla(n_dim=100, n_branch=8, sigma=4, branch_length=500)
 
-emb_full = EmbedOR(subsample=False).fit_transform(noisy_tree)
-emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(noisy_tree)
-emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(noisy_tree)
+# emb_full = EmbedOR(subsample=False).fit_transform(noisy_tree)
+# emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(noisy_tree)
+# emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(noisy_tree)
 
-plt.figure(figsize=(10, 6))
-plot_data_2D(emb_full, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_tree_full.png'), dpi=1200)
-plt.figure(figsize=(10, 6))
-plot_data_2D(emb_subsample, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_tree_subsample_05.png'), dpi=1200)
-plt.figure(figsize=(10, 6))
-plot_data_2D(emb_subsample_2, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_tree_subsample_01.png'), dpi=1200)
+# plt.figure(figsize=(10, 6))
+# plot_data_2D(emb_full, None, None)
+# plt.savefig(os.path.join(output_dir, 'emb_tree_full.png'), dpi=1200)
+# plt.figure(figsize=(10, 6))
+# plot_data_2D(emb_subsample, None, None)
+# plt.savefig(os.path.join(output_dir, 'emb_tree_subsample_05.png'), dpi=1200)
+# plt.figure(figsize=(10, 6))
+# plot_data_2D(emb_subsample_2, None, None)
+# plt.savefig(os.path.join(output_dir, 'emb_tree_subsample_01.png'), dpi=1200)
 
-# %%
+# # %%
 
 
 
@@ -136,72 +137,113 @@ def est_geodesic_distance(X, k=15, scale_factor=1):
 from src.data.data import *
 noise = 0.1
 noise_thresh = None
-return_dict = concentric_circles(n_points=n_points, factor=0.4, noise=noise, noise_thresh=noise_thresh)
-gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
 
-spearman_corrs_circles = []
+spearman_corrs_circles_dict = {}
 for subsample_factor in subsample_factors:
-    embedor = EmbedOR(subsample=True, subsample_factor=subsample_factor)
-    embedding = embedor.fit_transform(return_dict['data'])
-    pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
-    spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
-    print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
-    spearman_corrs_circles.append(spearman_corr_embedor)
+    spearman_corrs_circles_dict[str(subsample_factor)] = []
+for it in range(n_iter):
+    print(f"Iteration {it+1}/{n_iter}")
+    return_dict = concentric_circles(n_points=n_points, factor=0.4, noise=noise, noise_thresh=noise_thresh)
+    gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
+    for subsample_factor in subsample_factors:
+        embedor = EmbedOR(subsample=True, subsample_factor=subsample_factor)
+        embedding = embedor.fit_transform(return_dict['data'])
+        pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
+        spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
+        print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
+        spearman_corrs_circles_dict[str(subsample_factor)].append(spearman_corr_embedor)
+spearman_corrs_circles_mean = [np.mean(spearman_corrs_circles_dict[str(subsample_factor)]) for subsample_factor in subsample_factors]
+spearman_corrs_circles_std = [np.std(spearman_corrs_circles_dict[str(subsample_factor)]) for subsample_factor in subsample_factors]
 
 
 # %%
 noise = 1
 noise_thresh = None
-return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh)
-gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
 
-spearman_corrs_swiss_roll = []
+spearman_corrs_swiss_roll_dict = {}
 for subsample_factor in subsample_factors:
-    embedor = EmbedOR(subsample=True, subsample_factor=subsample_factor)
-    embedding = embedor.fit_transform(return_dict['data'])
-    pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
-    spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
-    print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
-    spearman_corrs_swiss_roll.append(spearman_corr_embedor)
+    spearman_corrs_swiss_roll_dict[str(subsample_factor)] = []
+for it in range(n_iter):
+    print(f"Iteration {it+1}/{n_iter}")
+    return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh)
+    gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
+    for subsample_factor in subsample_factors:
+        embedor = EmbedOR(subsample=True, subsample_factor=subsample_factor)
+        embedding = embedor.fit_transform(return_dict['data'])
+        pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
+        spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
+        print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
+        spearman_corrs_swiss_roll_dict[str(subsample_factor)].append(spearman_corr_embedor)
+
+spearman_corrs_swiss_roll_mean = [np.mean(spearman_corrs_swiss_roll_dict[str(subsample_factor)]) for subsample_factor in subsample_factors]
+spearman_corrs_swiss_roll_std = [np.std(spearman_corrs_swiss_roll_dict[str(subsample_factor)]) for subsample_factor in subsample_factors]
 
 
 # %%
 noise = 0.5
 noise_thresh = None
-return_dict = torus(n_points=n_points, noise=noise, noise_thresh=noise_thresh, double=True)
-gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
 
-spearman_corrs_torus = []
+spearman_corrs_torus_dict = {}
 for subsample_factor in subsample_factors:
-    embedor = EmbedOR(subsample=True, subsample_factor=subsample_factor)
-    embedding = embedor.fit_transform(return_dict['data'])
-    pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
-    spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
-    print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
-    spearman_corrs_torus.append(spearman_corr_embedor)
+    spearman_corrs_torus_dict[str(subsample_factor)] = []
+for it in range(n_iter):
+    print(f"Iteration {it+1}/{n_iter}")
+    return_dict = torus(n_points=n_points, noise=noise, noise_thresh=noise_thresh, double=True)
+    gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
+    for subsample_factor in subsample_factors:
+        embedor = EmbedOR(subsample=True, subsample_factor=subsample_factor)
+        embedding = embedor.fit_transform(return_dict['data'])
+        pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
+        spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
+        print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
+        spearman_corrs_torus_dict[str(subsample_factor)].append(spearman_corr_embedor)
+spearman_corrs_torus_mean = [np.mean(spearman_corrs_torus_dict[str(subsample_factor)]) for subsample_factor in subsample_factors]
+spearman_corrs_torus_std = [np.std(spearman_corrs_torus_dict[str(subsample_factor)]) for subsample_factor in subsample_factors]
 
 # %%
-noisy_tree, tree = gen_dla(n_dim=100, n_branch=8, sigma=4, branch_length=500)
-return_dict = {'data': noisy_tree, 'noiseless_data': tree}
-gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
 
-spearman_corrs_tree = []
+spearman_corrs_tree_dict = {}
 for subsample_factor in subsample_factors:
-    embedor = EmbedOR(subsample=True, subsample_factor=subsample_factor)
-    embedding = embedor.fit_transform(return_dict['data'])
-    pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
-    spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
-    print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
-    spearman_corrs_tree.append(spearman_corr_embedor)
+    spearman_corrs_tree_dict[str(subsample_factor)] = []
+for it in range(n_iter):
+    print(f"Iteration {it+1}/{n_iter}")
+    noisy_tree, tree = gen_tree(n_points=n_points)
+    return_dict = {'data': noisy_tree, 'noiseless_data': tree}
+    gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
+    for subsample_factor in subsample_factors:
+        embedor = EmbedOR(subsample=True, subsample_factor=subsample_factor)
+        embedding = embedor.fit_transform(return_dict['data'])
+        pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
+        spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
+        print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
+        spearman_corrs_tree_dict[str(subsample_factor)].append(spearman_corr_embedor)
+spearman_corrs_tree_mean = [np.mean(spearman_corrs_tree_dict[str(subsample_factor)]) for subsample_factor in subsample_factors]
+spearman_corrs_tree_std = [np.std(spearman_corrs_tree_dict[str(subsample_factor)]) for subsample_factor in subsample_factors]
 
 # %%
 plt.figure(figsize=(10, 6))
-plt.plot(subsample_factors, spearman_corrs_circles, label='Circles', color='blue', marker='o')
-plt.plot(subsample_factors, spearman_corrs_swiss_roll, label='Swiss Roll', color='orange', marker='o')
-plt.plot(subsample_factors, spearman_corrs_torus, label='Torus', color='green', marker='o')
-plt.plot(subsample_factors, spearman_corrs_tree, label='Tree', color='red', marker='o')
+plt.fill_between(subsample_factors, 
+                 np.array(spearman_corrs_circles_mean) - np.array(spearman_corrs_circles_std), 
+                 np.array(spearman_corrs_circles_mean) + np.array(spearman_corrs_circles_std), 
+                 alpha=0.2, color='blue')
+plt.plot(subsample_factors, spearman_corrs_circles_mean, label='Circles', color='blue', marker='o')
+plt.fill_between(subsample_factors, 
+                 np.array(spearman_corrs_swiss_roll_mean) - np.array(spearman_corrs_swiss_roll_std), 
+                 np.array(spearman_corrs_swiss_roll_mean) + np.array(spearman_corrs_swiss_roll_std),
+                    alpha=0.2, color='orange')
+plt.plot(subsample_factors, spearman_corrs_swiss_roll_mean, label='Swiss Roll', color='orange', marker='o')
+plt.fill_between(subsample_factors, 
+                 np.array(spearman_corrs_torus_mean) - np.array(spearman_corrs_torus_std), 
+                 np.array(spearman_corrs_torus_mean) + np.array(spearman_corrs_torus_std),
+                 alpha=0.2, color='green')
+plt.plot(subsample_factors, spearman_corrs_torus_mean, label='Torus', color='green', marker='o')
+plt.fill_between(subsample_factors, 
+                 np.array(spearman_corrs_tree_mean) - np.array(spearman_corrs_tree_std), 
+                 np.array(spearman_corrs_tree_mean) + np.array(spearman_corrs_tree_std),
+                 alpha=0.2, color='red')
+plt.plot(subsample_factors, spearman_corrs_tree_mean, label='Tree', color='red', marker='o')
 plt.xlabel('Subsample Factor', fontsize=14)
 plt.ylabel('Spearman Correlation', fontsize=14)
 plt.ylim(0, 1)
 plt.legend()
-plt.savefig(os.path.join(output_dir, 'subsample_spearman_correlations.png'), dpi=1200)
+plt.savefig(os.path.join(output_dir, 'subsample_spearman_correlations_mean_std.png'), dpi=1200)

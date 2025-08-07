@@ -25,6 +25,7 @@ if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
 n_points = 5000
+n_iter = 10
 n_landmarks_array = [500, 450, 400, 350, 300, 250, 200, 150, 100, 50]
 np.random.seed(42)
 
@@ -54,73 +55,118 @@ def est_geodesic_distance(X, k=15, scale_factor=1):
 from src.data.data import *
 noise = 0.1
 noise_thresh = None
-return_dict = concentric_circles(n_points=n_points, factor=0.4, noise=noise, noise_thresh=noise_thresh)
-gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
 
-spearman_corrs_circles = []
+spearman_corrs_circles_dict = {}
 for n_landmarks in n_landmarks_array:
-    embedor = EmbedOR(n_landmarks=n_landmarks)
-    embedding = embedor.fit_transform(return_dict['data'])
-    pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
-    spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
-    print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
-    spearman_corrs_circles.append(spearman_corr_embedor)
+    spearman_corrs_circles_dict[str(n_landmarks)] = []
 
+for it in range(n_iter):
+    return_dict = concentric_circles(n_points=n_points, factor=0.4, noise=noise, noise_thresh=noise_thresh)
+    gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
+
+    for n_landmarks in n_landmarks_array:
+        embedor = EmbedOR(n_landmarks=n_landmarks)
+        embedding = embedor.fit_transform(return_dict['data'])
+        pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
+        spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
+        print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
+        spearman_corrs_circles_dict[str(n_landmarks)].append(spearman_corr_embedor)
+
+spearman_corrs_circles_mean = [np.mean(spearman_corrs_circles_dict[str(n_landmarks)]) for n_landmarks in n_landmarks_array]
+spearman_corrs_circles_std = [np.std(spearman_corrs_circles_dict[str(n_landmarks)]) for n_landmarks in n_landmarks_array]
 
 # %%
 noise = 1
 noise_thresh = None
-return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh)
-gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
 
-spearman_corrs_swiss_roll = []
+spearman_corrs_swiss_roll_dict = {}
 for n_landmarks in n_landmarks_array:
-    embedor = EmbedOR(n_landmarks=n_landmarks)
-    embedding = embedor.fit_transform(return_dict['data'])
-    pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
-    spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
-    print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
-    spearman_corrs_swiss_roll.append(spearman_corr_embedor)
+    spearman_corrs_swiss_roll_dict[str(n_landmarks)] = []
+for it in range(n_iter):
+    return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh)
+    gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
 
+    for n_landmarks in n_landmarks_array:
+        embedor = EmbedOR(n_landmarks=n_landmarks)
+        embedding = embedor.fit_transform(return_dict['data'])
+        pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
+        spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
+        print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
+        spearman_corrs_swiss_roll_dict[str(n_landmarks)].append(spearman_corr_embedor)
+
+spearman_corrs_swiss_roll_mean = [np.mean(spearman_corrs_swiss_roll_dict[str(n_landmarks)]) for n_landmarks in n_landmarks_array]
+spearman_corrs_swiss_roll_std = [np.std(spearman_corrs_swiss_roll_dict[str(n_landmarks)]) for n_landmarks in n_landmarks_array]
 
 # %%
 noise = 0.5
 noise_thresh = None
-return_dict = torus(n_points=n_points, noise=noise, noise_thresh=noise_thresh, double=True)
-gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
 
-spearman_corrs_torus = []
+spearman_corrs_torus_dict = {}
 for n_landmarks in n_landmarks_array:
-    embedor = EmbedOR(n_landmarks=n_landmarks)
-    embedding = embedor.fit_transform(return_dict['data'])
-    pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
-    spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
-    print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
-    spearman_corrs_torus.append(spearman_corr_embedor)
+    spearman_corrs_torus_dict[str(n_landmarks)] = []
+for it in range(n_iter): 
+    return_dict = torus(n_points=n_points, noise=noise, noise_thresh=noise_thresh, double=True)
+    gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
+
+    for n_landmarks in n_landmarks_array:
+        embedor = EmbedOR(n_landmarks=n_landmarks)
+        embedding = embedor.fit_transform(return_dict['data'])
+        pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
+        spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
+        print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
+        spearman_corrs_torus_dict[str(n_landmarks)].append(spearman_corr_embedor)
+
+spearman_corrs_torus_mean = [np.mean(spearman_corrs_torus_dict[str(n_landmarks)]) for n_landmarks in n_landmarks_array]
+spearman_corrs_torus_std = [np.std(spearman_corrs_torus_dict[str(n_landmarks)]) for n_landmarks in n_landmarks_array]
 
 # %%
-noisy_tree, tree = gen_dla(n_dim=100, n_branch=8, sigma=4, branch_length=500)
-return_dict = {'data': noisy_tree, 'noiseless_data': tree}
-gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
 
-spearman_corrs_tree = []
+spearman_corrs_tree_dict = {}
 for n_landmarks in n_landmarks_array:
-    embedor = EmbedOR(n_landmarks=n_landmarks)
-    embedding = embedor.fit_transform(noisy_tree)
-    pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
-    spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
-    print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
-    spearman_corrs_tree.append(spearman_corr_embedor)
+    spearman_corrs_tree_dict[str(n_landmarks)] = []
+
+for it in range(n_iter):
+    noisy_tree, tree = gen_tree(n_points=n_points)
+    return_dict = {'data': noisy_tree, 'noiseless_data': tree}
+    gt_geodesic_distance = est_geodesic_distance(return_dict['noiseless_data'], k=15)
+
+    for n_landmarks in n_landmarks_array:
+        embedor = EmbedOR(n_landmarks=n_landmarks)
+        embedding = embedor.fit_transform(return_dict['data'])
+        pdist_embedor = squareform(pdist(embedding, metric='euclidean'))
+        spearman_corr_embedor, _ = spearmanr(pdist_embedor.flatten(), gt_geodesic_distance.flatten())
+        print(f'Spearman correlation EmbedOR: {spearman_corr_embedor}')
+        spearman_corrs_tree_dict[str(n_landmarks)].append(spearman_corr_embedor)
+
+spearman_corrs_tree_mean = [np.mean(spearman_corrs_tree_dict[str(n_landmarks)]) for n_landmarks in n_landmarks_array]
+spearman_corrs_tree_std = [np.std(spearman_corrs_tree_dict[str(n_landmarks)]) for n_landmarks in n_landmarks_array]
 
 # %%
 plt.figure(figsize=(10, 6))
-plt.plot(n_landmarks_array, spearman_corrs_circles, label='Circles', color='blue', marker='o')
-plt.plot(n_landmarks_array, spearman_corrs_swiss_roll, label='Swiss Roll', color='orange', marker='o')
-plt.plot(n_landmarks_array, spearman_corrs_torus, label='Torus', color='green', marker='o')
-plt.plot(n_landmarks_array, spearman_corrs_tree, label='Tree', color='red', marker='o')
+# fill_between for std
+plt.fill_between(n_landmarks_array, 
+                 np.array(spearman_corrs_circles_mean) - np.array(spearman_corrs_circles_std), 
+                 np.array(spearman_corrs_circles_mean) + np.array(spearman_corrs_circles_std), 
+                 alpha=0.2, color='blue')
+plt.plot(n_landmarks_array, spearman_corrs_circles_mean, label='Circles', color='blue', marker='o')
+plt.fill_between(n_landmarks_array, 
+                 np.array(spearman_corrs_swiss_roll_mean) - np.array(spearman_corrs_swiss_roll_std), 
+                 np.array(spearman_corrs_swiss_roll_mean) + np.array(spearman_corrs_swiss_roll_std), 
+                 alpha=0.2,  color='orange')
+plt.plot(n_landmarks_array, spearman_corrs_swiss_roll_mean, label='Swiss Roll', color='orange', marker='o')
+plt.fill_between(n_landmarks_array, 
+                 np.array(spearman_corrs_torus_mean) - np.array(spearman_corrs_torus_std), 
+                 np.array(spearman_corrs_torus_mean) + np.array(spearman_corrs_torus_std), 
+                 alpha=0.2, color='green')
+plt.plot(n_landmarks_array, spearman_corrs_torus_mean, label='Torus', color='green', marker='o')
+plt.fill_between(n_landmarks_array, 
+                 np.array(spearman_corrs_tree_mean) - np.array(spearman_corrs_tree_std), 
+                 np.array(spearman_corrs_tree_mean) + np.array(spearman_corrs_tree_std), 
+                 alpha=0.2,  color='red')
+plt.plot(n_landmarks_array, spearman_corrs_tree_mean, label='Tree', color='red', marker='o')
 plt.xlabel('Number of landmarks', fontsize=14)
 plt.ylabel('Spearman Correlation', fontsize=14)
 plt.xticks(n_landmarks_array, fontsize=12)
 plt.ylim(0, 1)
 plt.legend()
-plt.savefig(os.path.join(output_dir, 'lmk_spearman_correlations.png'), dpi=1200)
+plt.savefig(os.path.join(output_dir, 'lmk_spearman_correlations_mean_std.png'), dpi=1200)
