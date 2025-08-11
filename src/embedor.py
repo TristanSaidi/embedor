@@ -34,7 +34,8 @@ class EmbedOR(object):
             edge_weight='orc',
             subsample=False,
             subsample_factor=0.05,
-            n_landmarks=None
+            n_landmarks=None,
+            landmark_selection='random'
         ):
 
         """ 
@@ -69,6 +70,7 @@ class EmbedOR(object):
         self.subsample = subsample
         self.subsample_factor = subsample_factor
         self.n_landmarks = n_landmarks
+        self.landmark_selection = landmark_selection
 
     def fit_transform(self, X=None):
         if not self.fitted:
@@ -169,13 +171,13 @@ class EmbedOR(object):
 
     def _landmark_apsp(self):
         # algorithm from Potamias et. al. https://www.francescobonchi.com/paper_7.pdf
-        # sort nodes by degree
-        # if self.n_landmarks > self.X.shape[0]/10:
-            # raise Warning("Number of landmarks should be small, otherwise exact APSP call is quicker.")
-        betweenness = nk.centrality.ApproxBetweenness(self.G_nk).run().ranking() # returns list of tuples (node, betweenness)
-        landmark_indices_tuple = betweenness[:self.n_landmarks]  # take the top n_landmark
-        self.landmark_indices = [node for node, _ in landmark_indices_tuple]
-        print(f"Selected landmark indices.")
+        if self.landmark_selection == 'random':
+            # select random landmarks
+            self.landmark_indices = np.random.choice(self.G.number_of_nodes(), self.n_landmarks, replace=False)
+        else: 
+            betweenness = nk.centrality.ApproxBetweenness(self.G_nk).run().ranking() # returns list of tuples (node, betweenness)
+            landmark_indices_tuple = betweenness[:self.n_landmarks]  # take the top n_landmark
+            self.landmark_indices = [node for node, _ in landmark_indices_tuple]
         nk_obj = nk.distance.SPSP(self.G_nk, self.landmark_indices).run()
         X_emb = np.array(nk_obj.run().getDistances()).T
         L = scipy.spatial.distance_matrix(X_emb, X_emb, p=np.inf) # lower bound estimator
