@@ -3,6 +3,7 @@ from src.embedor import *
 from src.plotting import *
 import matplotlib.pyplot as plt
 import umap
+from src.utils.umap_exact import UMAP_exact
 import numpy as np
 from sklearn.manifold import TSNE
 import time
@@ -17,12 +18,14 @@ os.makedirs(save_path, exist_ok=True)
 embedor_times = []
 embedor_times_landmark = []
 umap_times = []
+umap_times_approx = []
 tsne_times = []
 tsne_times_approx = []
 
 cutoff_embedor = False
 cutoff_embedor_landmark = False
 cutoff_umap = False
+cutoff_umap_approx = False
 cutoff_tsne = False
 cutoff_tsne_approx = False
 cutoff_time = 1e3
@@ -30,6 +33,7 @@ cutoff_time = 1e3
 embedor_npt_idx = 0
 embedor_landmark_npt_idx = 0
 umap_npt_idx = 0
+umap_approx_npt_idx = 0
 tsne_npt_idx = 0
 tsne_approx_npt_idx = 0
 
@@ -56,7 +60,7 @@ for idx, n_points in enumerate(n_points_array):
 
     if not cutoff_embedor_landmark:
         time_start = time.time()
-        embedor = EmbedOR(landmark_selection='random', n_landmarks=50)
+        embedor = EmbedOR(landmark_selection='random', n_landmarks=50, subsample=True, subsample_factor=0.2)
         _ = embedor.fit_transform(return_dict['data'])
         time_end = time.time()
         embedor_time_landmark = time_end - time_start
@@ -68,7 +72,7 @@ for idx, n_points in enumerate(n_points_array):
 
     if not cutoff_umap:
         time_start = time.time()
-        umap_model = umap.UMAP()
+        umap_model = UMAP_exact(n_neighbors=15, min_dist=0.1, n_components=2, metric='euclidean', verbose=True, n_epochs=300)
         _ = umap_model.fit_transform(return_dict['data'])
         time_end = time.time()
         umap_time = time_end - time_start
@@ -77,6 +81,18 @@ for idx, n_points in enumerate(n_points_array):
             cutoff_umap = True
             print(f"UMAP took too long: {umap_time:.2f} seconds, stopping further tests.")
         umap_npt_idx += 1
+
+    if not cutoff_umap_approx:
+        time_start = time.time()
+        umap_model = umap.UMAP(n_neighbors=15, min_dist=0.1, n_components=2, metric='euclidean', verbose=True, n_epochs=300)
+        _ = umap_model.fit_transform(return_dict['data'])
+        time_end = time.time()
+        umap_time_approx = time_end - time_start
+        umap_times_approx.append(umap_time_approx)
+        if umap_time_approx > cutoff_time:
+            cutoff_umap_approx = True
+            print(f"UMAP (Approx) took too long: {umap_time_approx:.2f} seconds, stopping further tests.")
+        umap_approx_npt_idx += 1
 
     if not cutoff_tsne:
         time_start = time.time()
@@ -105,8 +121,9 @@ for idx, n_points in enumerate(n_points_array):
     # Plotting the results
     plt.figure(figsize=(12, 6))
     plt.plot(n_points_array[:embedor_npt_idx], embedor_times, label='EmbedOR', marker='o')
-    plt.plot(n_points_array[:embedor_landmark_npt_idx], embedor_times_landmark, label='EmbedOR (Landmark)', marker='o')
+    plt.plot(n_points_array[:embedor_landmark_npt_idx], embedor_times_landmark, label='EmbedOR (approx)', marker='o')
     plt.plot(n_points_array[:umap_npt_idx], umap_times, label='UMAP', marker='o')
+    plt.plot(n_points_array[:umap_approx_npt_idx], umap_times_approx, label='UMAP (Approx)', marker='o')
     plt.plot(n_points_array[:tsne_npt_idx], tsne_times, label='t-SNE (Exact)', marker='o')
     plt.plot(n_points_array[:tsne_approx_npt_idx], tsne_times_approx, label='t-SNE (Approx)', marker='o')
     plt.xlabel('Number of Points')
