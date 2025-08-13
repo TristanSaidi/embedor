@@ -180,7 +180,8 @@ class EmbedOR(object):
             self.landmark_indices = [node for node, _ in landmark_indices_tuple]
         nk_obj = nk.distance.SPSP(self.G_nk, self.landmark_indices).run()
         X_emb = np.array(nk_obj.run().getDistances()).T
-        L = scipy.spatial.distance_matrix(X_emb, X_emb, p=np.inf) # lower bound estimator
+        # L = scipy.spatial.distance_matrix(X_emb, X_emb, p=np.inf) # lower bound estimator
+        L = pairwise_distances(X_emb, metric='chebyshev') # lower bound estimator
         apsp = L
         # fill diag with 0
         np.fill_diagonal(apsp, 0)
