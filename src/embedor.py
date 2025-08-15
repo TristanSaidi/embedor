@@ -212,7 +212,14 @@ class EmbedOR(object):
 
     def _compute_affinities(self):
         time_start = time.time()
-        self.all_affinities = squareform(joint_probabilities(self.apsp, desired_perplexity=self.perplexity, verbose=0))
+        from sklearn.neighbors import kneighbors_graph
+        # get mask for 3 * perplexity k-nearest neighbors
+        A_perp = kneighbors_graph(self.apsp, n_neighbors=3 * self.perplexity, mode='connectivity', metric='precomputed')
+        row, col = A_perp.nonzero()
+        apsp_perp = self.apsp[row, col]
+        apsp_perp = scipy.sparse.csr_matrix((apsp_perp, (row, col)), shape=A_perp.shape)
+
+        self.all_affinities = squareform(joint_probabilities_nn(apsp_perp, desired_perplexity=self.perplexity, verbose=0))
 
         # symmetrize affinities
         self.all_affinities = (self.all_affinities + self.all_affinities.T) / 2
