@@ -1,7 +1,7 @@
 # check if matplotlib is already imported
 import matplotlib.pyplot as plt
 # # from src.data.data import *
-from src.utils.graph_utils import *
+from src.utils.graph_utils import compute_frc, compute_orc, get_nn_graph
 # # from src.utils.embeddings import *
 import numpy as np
 from src.utils.layout import *
@@ -10,15 +10,21 @@ from sklearn.metrics import pairwise_distances
 from scipy.sparse import csr_matrix
 from scipy.spatial.distance import pdist, squareform
 
-
 import scipy
 import networkit as nk
-
+import time
 
 ENERGY_PARAMS = {
-    'k_max': 1,
-    'k_min': -2,
-    'k_crit': 0
+    'orc': {
+        'k_max': 1,
+        'k_min': -2,
+        'k_crit': 0
+    },
+    'frc': {
+        'k_max': 25,
+        'k_min': -35,
+        'k_crit': -5
+    }
 }
 
 class EmbedOR(object):
@@ -57,6 +63,12 @@ class EmbedOR(object):
         self.weighted = self.exp_params.get('weighted', True)
         self.perplexity = self.exp_params.get('perplexity', 150)
         self.edge_weight = edge_weight
+        # obtain energy parameters
+        if edge_weight in ENERGY_PARAMS:
+            energy_params = ENERGY_PARAMS[edge_weight]
+            self.k_max = energy_params['k_max']
+            self.k_min = energy_params['k_min']
+            self.k_crit = energy_params['k_crit']
         self.exp_params = {
             'mode': self.nn_mode,
             'n_neighbors': self.k,
@@ -76,11 +88,8 @@ class EmbedOR(object):
         if not self.fitted:
             self.fit(X)
         if self.subsample:
-            print("Subsampling interactions...")
             self._subsample_interactions()
-        print("Initializing embedding...")
         self._init_embedding()
-        print("Running Stochastic Neighbor Embedding...")
         self._layout(
             affinities=self.all_affinities,
             repulsions=self.all_repulsions
@@ -89,13 +98,9 @@ class EmbedOR(object):
 
     def fit(self, X=None):
         self.X = X
-        print("Building nearest neighbor graph...")
-        self._build_nnG() # self.G, self.orcs, self.A are now available
-        print("Computing distances...")
+        self._build_nnG() # self.G, self.curvatures, self.A are now available
         self._compute_distances()
-        print("Computing affinities...")
         self._compute_affinities()
-        print("Updating the graph attributes...")
         self._update_G() # add edge attribute 'affinity'
         self.fitted = True
 
@@ -118,12 +123,24 @@ class EmbedOR(object):
             raise ValueError("Data must be provided to build the nearest neighbor graph.")
         
         # compute nearest neighbor graph
+        time_start = time.time()
         return_dict = get_nn_graph(self.X, self.exp_params)
         G = return_dict['G']
+        time_end = time.time()
+        print(f"Time taken to build nearest neighbor graph: {time_end - time_start:.2f} seconds")
         
         # compute ORC
-        return_dict = compute_orc(G, nbrhood_size=1) # compute ORC using 1-hop neighborhood
-        self.orcs = return_dict['orcs']
+        time_start = time.time()
+        if self.edge_weight == "orc":
+            return_dict = compute_orc(G, nbrhood_size=1) # compute ORC using 1-hop neighborhood
+            self.curvatures = return_dict['orcs']
+        elif self.edge_weight == "frc":
+            return_dict = compute_frc(G)
+            self.curvatures = return_dict['frcs']
+            self.k_min = min(self.k_min, min(self.curvatures)-1) # -1 to avoid log(0)
+            self.k_max = max(self.k_max, max(self.curvatures))
+        time_end = time.time()
+        print(f"Time taken to compute {self.edge_weight.upper()} for each edge: {time_end - time_start:.2f} seconds")
 
         self.G = return_dict['G']
         self.A = nx.to_numpy_array(self.G, weight='weight', nodelist=list(range(len(self.G.nodes()))))
@@ -138,16 +155,16 @@ class EmbedOR(object):
 
     def _compute_distances(self, max_val=np.inf):
         # compute energy for each edge
-        # time_start = time.time()
-
+        
+        time_start = time.time()
         if self.edge_weight != "euclidean":
-            k_max = ENERGY_PARAMS['k_max']
-            k_min = ENERGY_PARAMS['k_min']
-            k_crit = ENERGY_PARAMS['k_crit']
+            k_max = self.k_max
+            k_min = self.k_min
+            k_crit = self.k_crit
             energies = []
 
             for idx, (u, v) in enumerate(self.G.edges()):
-                orc = self.orcs[idx]
+                orc = self.curvatures[idx]
                 c = 1/np.log((k_max-k_min)/(k_crit-k_min))                
                 energy = (-c * np.log(orc - k_min) + c * np.log(k_crit - k_min) + 1) ** self.p + 1 # energy(k_max) = 1, energy(k_min) = infty, energy(k_crit) = 2                max_energy = max(energy, max_energy)
                 energy = np.clip(energy, 0, max_val) # clip energy to max
@@ -156,14 +173,20 @@ class EmbedOR(object):
                 self.G[u][v]['energy'] = energy
                 energies.append(energy)
             self.G_nk = nk.nxadapter.nx2nk(self.G, weightAttr='energy')                    
-
         else:
             self.G_nk = nk.nxadapter.nx2nk(self.G, weightAttr='weight')
+        time_end = time.time()
+        print(f"Time taken to compute edge energies: {time_end - time_start:.2f} seconds")
+
+        time_start = time.time()
         if self.n_landmarks is not None: # landmark APSP
             self._landmark_apsp()
         else: # exact APSP
             self.apsp = nk.distance.APSP(self.G_nk).run().getDistances()
             self.apsp = np.array(self.apsp)
+        time_end = time.time()
+        print(f"Time taken to compute APSP: {time_end - time_start:.2f} seconds")
+
         indices = list(self.G.nodes())
         inverse_indices = [indices.index(i) for i in range(len(indices))]
         self.apsp = self.apsp[inverse_indices, :][:, inverse_indices]
@@ -188,7 +211,7 @@ class EmbedOR(object):
         self.apsp = apsp
 
     def _compute_affinities(self):
-        from scipy.spatial.distance import squareform     
+        time_start = time.time()
         self.all_affinities = squareform(joint_probabilities(self.apsp, desired_perplexity=self.perplexity, verbose=0))
 
         # symmetrize affinities
@@ -197,10 +220,13 @@ class EmbedOR(object):
         # fill diagonal with 0
         np.fill_diagonal(self.all_affinities, 0)
         np.fill_diagonal(self.all_repulsions, 0)
+        time_end = time.time()
+        print(f"Time taken to compute affinities: {time_end - time_start:.2f} seconds")
 
 
     def _init_embedding(self):
         # spectral initialization
+        time_start = time.time()
         A_affinity_sparse = nx.to_scipy_sparse_array(self.G, weight='affinity', nodelist=list(range(len(self.G.nodes()))))
         self.spectral_init = spectral_layout(
             data=None,
@@ -215,8 +241,11 @@ class EmbedOR(object):
             np.max(self.embedding, axis=0) - np.min(self.embedding, axis=0)
         ) * 1 - 0.5
         self.spectral_init = self.embedding.copy()
+        time_end = time.time()
+        print(f"Time taken to initialize embedding: {time_end - time_start:.2f} seconds")
 
     def _layout(self, affinities, repulsions):
+        time_start = time.time()
         if self.subsample:
             affinities = affinities[self.subsample_indices[0], self.subsample_indices[1]]
             repulsions = repulsions[self.subsample_indices[0], self.subsample_indices[1]]
@@ -245,6 +274,8 @@ class EmbedOR(object):
             initial_alpha=0.25,
             verbose=False,
         )
+        time_end = time.time()
+        print(f"Time taken to optimize layout: {time_end - time_start:.2f} seconds")
 
     def _subsample_interactions(self):
         """

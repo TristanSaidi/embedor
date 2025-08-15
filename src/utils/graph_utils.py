@@ -2,8 +2,10 @@ import networkx as nx
 import numpy as np
 from sklearn import neighbors
 from src.ollivier_ricci import OllivierRicci
+import GraphRicciCurvature.FormanRicci as fr
 import pynndescent
 import tqdm
+import time
 
 
 def compute_orc(G, nbrhood_size=1):
@@ -28,6 +30,30 @@ def compute_orc(G, nbrhood_size=1):
     return {
         'G': orc.G,
         'orcs': orcs,
+    }
+
+def compute_frc(G):
+    """
+    Compute the Forman-Ricci curvature on edges of a graph.
+    Parameters
+    ----------
+    G : networkx.Graph
+        The graph.
+    nbrhood_size : int, optional
+        Number of hops to consider for neighborhood.
+    Returns
+    -------
+    G : networkx.Graph
+        The graph with the Forman-Ricci curvatures as edge attributes.
+    """
+    frc = fr.FormanRicci(G, weight='unweighted')
+    frc.compute_ricci_curvature()
+    frcs = []
+    for i, j, _ in frc.G.edges(data=True):
+        frcs.append(frc.G[i][j]['formanCurvature'])
+    return {
+        'G': frc.G,
+        'frcs': frcs,
     }
 
 
@@ -74,7 +100,7 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     G : networkx.Graph
         The proximity graph.
     """
-    
+    time_start = time.time()
     if mode == 'nbrs':
         assert n_neighbors is not None, "n_neighbors must be specified when mode='nbrs'."
         A = neighbors.kneighbors_graph(X, n_neighbors=n_neighbors, mode='distance')
@@ -82,11 +108,19 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
         assert epsilon is not None, "epsilon must be specified when mode='eps'."
         A = neighbors.radius_neighbors_graph(X, radius=epsilon, mode='distance')
     elif mode == 'descent':
+        n_trees = min(64, 5 + int(round((X.shape[0]) ** 0.5 / 20.0)))
+        n_iters = max(5, int(round(np.log2(X.shape[0]))))
         knn_search_index = pynndescent.NNDescent(
+            X,
             n_neighbors=n_neighbors,
-            data=X,
             metric='euclidean',
-            verbose=False
+            n_trees=n_trees,
+            n_iters=n_iters,
+            max_candidates=60,
+            low_memory=True,
+            n_jobs=-1,
+            verbose=False,
+            compressed=False,
         )
         indices, distances = knn_search_index.neighbor_graph
         # convert to adjacency matrix
@@ -98,6 +132,9 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
                 A[j, i] = d_ij
     else:
         raise ValueError("Invalid mode. Choose 'nbrs' or 'eps'.")
+    time_end = time.time()
+    print(f"\tTime taken to compute the adjacency matrix: {time_end - time_start:.2f} seconds")
+    time_start = time.time()
     # symmetrize the adjacency matrix
     if type(A) != np.ndarray:
         A = A.toarray()
@@ -105,21 +142,13 @@ def _get_nn_graph(X, mode='nbrs', n_neighbors=None, epsilon=None):
     assert np.allclose(A, A.T), "The adjacency matrix is not symmetric."
     # convert to networkx graph and symmetrize A
     n_points = X.shape[0]
-    nodes = set()
-    G = nx.Graph()
-    for i in range(n_points):
-        G.add_node(i)
-        G.nodes[i]['pos'] = X[i] # store the position of the node
-        for j in range(i+1, n_points):
-            if A[i, j] > 0:
-                G.add_edge(i, j, weight=A[i, j]) # weight is the euclidean distance
-                nodes.add(i)
-                nodes.add(j)
-                # add unweighted entry in dict
-                G[i][j]['unweighted'] = 1
+    G = nx.from_numpy_array(A)
+    nx.set_edge_attributes(G, 1, 'unweighted')
 
     assert G.is_directed() == False, "The graph is directed."
     assert len(G.nodes()) == n_points, "The graph has isolated nodes."
+    time_end = time.time()
+    print(f"\tTime taken to create the graph: {time_end - time_start:.2f} seconds")
     return G, A
 
 
