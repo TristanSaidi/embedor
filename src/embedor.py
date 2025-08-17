@@ -9,6 +9,7 @@ from umap.spectral import spectral_layout
 from sklearn.metrics import pairwise_distances
 from scipy.sparse import csr_matrix
 from scipy.spatial.distance import pdist, squareform
+from src.plotting import plot_graph_2D
 
 import scipy
 import networkit as nk
@@ -30,11 +31,14 @@ ENERGY_PARAMS = {
 class EmbedOR(object):
     def __init__(
             self, 
-            exp_params = {
+            nng_params = {
                 'mode': 'nbrs',
                 'n_neighbors': 15,
             }, 
             dim=2,
+            p = 3,
+            epochs=300,
+            perplexity=150,
             verbose=False,
             seed=10,
             edge_weight='orc',
@@ -54,14 +58,15 @@ class EmbedOR(object):
             The dimensionality of the embedding (if any).
         """
         self.dim = dim
-        self.exp_params = exp_params
-        self.nn_mode = exp_params.get('mode', 'nbrs')
-        self.k = self.exp_params.get('n_neighbors', None)
-        self.epsilon = self.exp_params.get('epsilon', None)
-        self.p = self.exp_params.get('p', 3)
-        self.epochs = self.exp_params.get('epochs', 300)
-        self.weighted = self.exp_params.get('weighted', True)
-        self.perplexity = self.exp_params.get('perplexity', 150)
+        self.nng_params = nng_params
+        assert 'mode' in self.nng_params, "Nearest neighbor graph parameter 'mode' not provided"
+        assert 'n_neighbors' in self.nng_params or 'epsilon' in self.nng_params, "Nearest neighbor graph parameter 'k' or 'epsilon' not provided"
+        self.nn_mode = nng_params.get('mode', 'nbrs')
+        self.k = self.nng_params.get('n_neighbors', None)
+        self.epsilon = self.nng_params.get('epsilon', None)
+        self.p = p
+        self.epochs = epochs
+        self.perplexity = perplexity
         self.edge_weight = edge_weight
         # obtain energy parameters
         if edge_weight in ENERGY_PARAMS:
@@ -124,7 +129,7 @@ class EmbedOR(object):
         
         # compute nearest neighbor graph
         time_start = time.time()
-        return_dict = get_nn_graph(self.X, self.exp_params)
+        return_dict = get_nn_graph(self.X, self.nng_params)
         G = return_dict['G']
         time_end = time.time()
         print(f"Time taken to build nearest neighbor graph: {time_end - time_start:.2f} seconds")
@@ -161,17 +166,16 @@ class EmbedOR(object):
             k_max = self.k_max
             k_min = self.k_min
             k_crit = self.k_crit
-            energies = []
+            self.energies = []
 
             for idx, (u, v) in enumerate(self.G.edges()):
                 orc = self.curvatures[idx]
                 c = 1/np.log((k_max-k_min)/(k_crit-k_min))                
                 energy = (-c * np.log(orc - k_min) + c * np.log(k_crit - k_min) + 1) ** self.p + 1 # energy(k_max) = 1, energy(k_min) = infty, energy(k_crit) = 2                max_energy = max(energy, max_energy)
                 energy = np.clip(energy, 0, max_val) # clip energy to max
-                if self.weighted:
-                    energy = energy * self.G[u][v]['weight'] # scale energy by weight (i.e. Euclidean distance)
+                energy = energy * self.G[u][v]['weight'] # scale energy by weight (i.e. Euclidean distance)
                 self.G[u][v]['energy'] = energy
-                energies.append(energy)
+                self.energies.append(energy)
             self.G_nk = nk.nxadapter.nx2nk(self.G, weightAttr='energy')                    
         else:
             self.G_nk = nk.nxadapter.nx2nk(self.G, weightAttr='weight')
@@ -304,33 +308,11 @@ class EmbedOR(object):
         # make sure we have unique pairs
         self.subsample_indices = np.unique(self.subsample_indices, axis=1)
 
-    def plot_distances(self):
-        plt.figure()
-        plt.hist(self.distances, bins=100)
-        plt.title("Energy Distribution")
-        plt.xlabel("Energy")
-        plt.ylabel("Count")
-        plt.show()
-
-    def plot_affinities(self):
-        plt.figure()
-        plt.hist(self.affinities, bins=100)
-        plt.title("Affinity Distribution")
-        plt.xlabel("Affinity")
-        plt.ylabel("Count")
-        plt.show()
-
-    def plot_spectral_init(self):
-        spectral_init = np.array([self.spectral_init[node] for node in self.G.nodes()])
-        emb = np.array([self.embedding[node] for node in self.G.nodes()])
-        plt.scatter(spectral_init[:, 0], spectral_init[:, 1], c='r', s=10)
-        plt.scatter(emb[:, 0], emb[:, 1], c='b', s=10)
-        plt.legend(["Spectral Init", "Final Embedding"])
-
-    def plot_apsp(self):
-        plt.figure()
-        plt.hist(self.apsp.flatten(), bins=100)
-        plt.title("APSP Energy Distribution")
-        plt.xlabel("APSP Energy")
-        plt.ylabel("Count")
-        plt.show()
+    def plot_low_energy_graph(self, edge_pctile=33):
+        self.G_low_energy = self.G.copy()
+        threshold = np.percentile(self.energies, edge_pctile)
+        for idx,(u, v) in enumerate(self.G_low_energy.edges()):
+            if self.energies[idx] > threshold:
+                self.G_low_energy.remove_edge(u, v)
+        # plot the graph
+        plot_graph_2D(self.embedding, self.G_low_energy, node_color=None, edge_width=0.1, node_size=0.0, edge_color='green')
