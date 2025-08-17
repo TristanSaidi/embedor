@@ -31,82 +31,82 @@ np.random.seed(42)
 
 
 
-# # %%
-# noise = 0.1
-# noise_thresh = None
-# return_dict = concentric_circles(n_points=n_points, factor=0.4, noise=noise, noise_thresh=noise_thresh)
+# %%
+noise = 0.1
+noise_thresh = None
+return_dict = concentric_circles(n_points=n_points, factor=0.4, noise=noise, noise_thresh=noise_thresh)
 
-# emb_full = EmbedOR(subsample=False).fit_transform(return_dict['data'])
-# emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(return_dict['data'])
-# emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(return_dict['data'])
+emb_full = EmbedOR(subsample=False).fit_transform(return_dict['data'])
+emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(return_dict['data'])
+emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(return_dict['data'])
 
-# # %%
-# plt.figure(figsize=(10, 6))
-# plot_data_2D(emb_full, None, None)
-# plt.savefig(os.path.join(output_dir, 'emb_circles_full.png'), dpi=1200)
-# plt.figure(figsize=(10, 6))
-# plot_data_2D(emb_subsample, None, None)
-# plt.savefig(os.path.join(output_dir, 'emb_circles_subsample_05.png'), dpi=1200)
-# plt.figure(figsize=(10, 6))
-# plot_data_2D(emb_subsample_2, None, None)
-# plt.savefig(os.path.join(output_dir, 'emb_circles_subsample_01.png'), dpi=1200)
+# %%
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_full, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_full.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_subsample, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_subsample_05.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_subsample_2, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_subsample_01.png'), dpi=1200)
 
-# # %%
-# noise = 1
-# noise_thresh = None
-# return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh)
+# %%
+noise = 1
+noise_thresh = None
+return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh)
 
-# emb_full = EmbedOR(subsample=False).fit_transform(return_dict['data'])
-# emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(return_dict['data'])
-# emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(return_dict['data'])
+emb_full = EmbedOR(subsample=False).fit_transform(return_dict['data'])
+emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(return_dict['data'])
+emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(return_dict['data'])
 
-# plt.figure(figsize=(10, 6))
-# plot_data_2D(emb_full, None, None)
-# plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_full.png'), dpi=1200)
-# plt.figure(figsize=(10, 6))
-# plot_data_2D(emb_subsample, None, None) 
-# plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_subsample_05.png'), dpi=1200)
-# plt.figure(figsize=(10, 6))
-# plot_data_2D(emb_subsample_2, None, None)
-# plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_subsample_01.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_full, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_full.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_subsample, None, None) 
+plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_subsample_05.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_subsample_2, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_subsample_01.png'), dpi=1200)
 
-# # %%
-# noise = 0.5
-# noise_thresh = None
-# return_dict = torus(n_points=n_points, noise=noise, noise_thresh=noise_thresh, double=True)
+# %%
+noise = 0.5
+noise_thresh = None
+return_dict = torus(n_points=n_points, noise=noise, noise_thresh=noise_thresh, double=True)
 
-# emb_full = EmbedOR(subsample=False).fit_transform(return_dict['data'])
-# emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(return_dict['data'])
-# emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(return_dict['data'])
+emb_full = EmbedOR(subsample=False).fit_transform(return_dict['data'])
+emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(return_dict['data'])
+emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(return_dict['data'])
 
-# plt.figure(figsize=(10, 6))
-# plot_data_2D(emb_full, None, None)
-# plt.savefig(os.path.join(output_dir, 'emb_torus_full.png'), dpi=1200)
-# plt.figure(figsize=(10, 6))
-# plot_data_2D(emb_subsample, None, None)
-# plt.savefig(os.path.join(output_dir, 'emb_torus_subsample_05.png'), dpi=1200)
-# plt.figure(figsize=(10, 6))
-# plot_data_2D(emb_subsample_2, None, None)
-# plt.savefig(os.path.join(output_dir, 'emb_torus_subsample_01.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_full, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_torus_full.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_subsample, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_torus_subsample_05.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_subsample_2, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_torus_subsample_01.png'), dpi=1200)
 
-# # %%
-# noisy_tree, tree = gen_dla(n_dim=100, n_branch=8, sigma=4, branch_length=500)
+# %%
+noisy_tree, tree = gen_tree(n_points=n_points)
 
-# emb_full = EmbedOR(subsample=False).fit_transform(noisy_tree)
-# emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(noisy_tree)
-# emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(noisy_tree)
+emb_full = EmbedOR(subsample=False).fit_transform(noisy_tree)
+emb_subsample = EmbedOR(subsample=True, subsample_factor=0.5).fit_transform(noisy_tree)
+emb_subsample_2 = EmbedOR(subsample=True, subsample_factor=0.1).fit_transform(noisy_tree)
 
-# plt.figure(figsize=(10, 6))
-# plot_data_2D(emb_full, None, None)
-# plt.savefig(os.path.join(output_dir, 'emb_tree_full.png'), dpi=1200)
-# plt.figure(figsize=(10, 6))
-# plot_data_2D(emb_subsample, None, None)
-# plt.savefig(os.path.join(output_dir, 'emb_tree_subsample_05.png'), dpi=1200)
-# plt.figure(figsize=(10, 6))
-# plot_data_2D(emb_subsample_2, None, None)
-# plt.savefig(os.path.join(output_dir, 'emb_tree_subsample_01.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_full, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_tree_full.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_subsample, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_tree_subsample_05.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_subsample_2, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_tree_subsample_01.png'), dpi=1200)
 
-# # %%
+# %%
 
 
 

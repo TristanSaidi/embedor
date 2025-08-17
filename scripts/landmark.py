@@ -23,12 +23,97 @@ print(f'REPO_ROOT: {REPO_ROOT}')
 output_dir = os.path.join(REPO_ROOT, 'outputs', 'landmark')
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
-
 n_points = 5000
+
+
+
+# %%
+noise = 0.1
+noise_thresh = None
+return_dict = concentric_circles(n_points=n_points, factor=0.4, noise=noise, noise_thresh=noise_thresh)
+
+emb_full = EmbedOR().fit_transform(return_dict['data'])
+emb_landmark = EmbedOR(n_landmarks=250).fit_transform(return_dict['data'])
+emb_landmark_2 = EmbedOR(n_landmarks=50).fit_transform(return_dict['data'])
+
+# %%
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_full, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_full.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_landmark, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_250.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_landmark_2, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_50.png'), dpi=1200)
+
+# %%
+noise = 1
+noise_thresh = None
+return_dict = swiss_roll(n_points=n_points, noise=noise, noise_thresh=noise_thresh)
+
+emb_full = EmbedOR().fit_transform(return_dict['data'])
+emb_landmark = EmbedOR(n_landmarks=250).fit_transform(return_dict['data'])
+emb_landmark_2 = EmbedOR(n_landmarks=50).fit_transform(return_dict['data'])
+
+# %%
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_full, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_full.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_landmark, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_250.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_landmark_2, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_50.png'), dpi=1200)
+
+# %%
+noise = 0.5
+noise_thresh = None
+return_dict = torus(n_points=n_points, noise=noise, noise_thresh=noise_thresh, double=True)
+
+emb_full = EmbedOR().fit_transform(return_dict['data'])
+emb_landmark = EmbedOR(n_landmarks=250).fit_transform(return_dict['data'])
+emb_landmark_2 = EmbedOR(n_landmarks=50).fit_transform(return_dict['data'])
+
+# %%
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_full, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_full.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_landmark, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_250.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_landmark_2, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_50.png'), dpi=1200)
+
+# %%
+noisy_tree, tree = gen_tree(n_points=n_points)
+
+emb_full = EmbedOR().fit_transform(noisy_tree)
+emb_landmark = EmbedOR(n_landmarks=250).fit_transform(noisy_tree)
+emb_landmark_2 = EmbedOR(n_landmarks=50).fit_transform(noisy_tree)
+
+# %%
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_full, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_full.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_landmark, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_250.png'), dpi=1200)
+plt.figure(figsize=(10, 6))
+plot_data_2D(emb_landmark_2, None, None)
+plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_50.png'), dpi=1200)
+
+# %%
+
+
+
+
+
 n_iter = 10
 n_landmarks_array = [500, 450, 400, 350, 300, 250, 200, 150, 100, 50]
 np.random.seed(42)
-
 
 
 # %%
