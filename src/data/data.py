@@ -4,7 +4,8 @@ import numpy as np
 import torchvision
 import torch
 
-DATA_DIR = "/home/tristan/Research/Fa24/isorc/data/"
+REPO_ROOT = os.getenv('PYTHONPATH')
+DATA_DIR = os.path.join(REPO_ROOT, 'data')
 
 # Data generation functions
 

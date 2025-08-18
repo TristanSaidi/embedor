@@ -19,6 +19,7 @@ sns.set_theme()
 
 exp_params = {
     'p': 3,
+    'mode': 'nbrs',
     'n_neighbors': 15,
 }
 

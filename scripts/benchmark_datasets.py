@@ -21,7 +21,7 @@ sns.set_theme()
 # diffusion distance
 
 exp_params = {
-    'p': 3,
+    'mode': 'nbrs',
     'n_neighbors': 15,
 }
 
@@ -55,15 +55,15 @@ def benchmark_datasets(n_points):
 
     embedor = EmbedOR(exp_params)
     embedding = embedor.fit_transform(mnist_data)
-    # embedor_euc = EmbedOR(exp_params, edge_weight='euclidean')
-    # embedding_euc = embedor_euc.fit_transform(mnist_data)
-    # umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean').fit_transform(mnist_data)
+    embedor_euc = EmbedOR(exp_params, edge_weight='euclidean')
+    embedding_euc = embedor_euc.fit_transform(mnist_data)
+    umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean').fit_transform(mnist_data)
     umap_orcmanl_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='precomputed').fit_transform(apsp)
-    # tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300).fit_transform(mnist_data)
+    tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300).fit_transform(mnist_data)
     tsne_orcmanl_emb = TSNE(n_components=2, perplexity=30, n_iter=300, metric='precomputed', init='random').fit_transform(apsp)
-    # phate_emb = phate.PHATE(n_jobs=-2).fit_transform(mnist_data)
-    # spectral_emb = SpectralEmbedding(n_components=2, affinity='rbf').fit_transform(mnist_data)
-    # iso_emb = Isomap(n_neighbors=15, n_components=2).fit_transform(mnist_data)
+    phate_emb = phate.PHATE(n_jobs=-2).fit_transform(mnist_data)
+    spectral_emb = SpectralEmbedding(n_components=2, affinity='rbf').fit_transform(mnist_data)
+    iso_emb = Isomap(n_neighbors=15, n_components=2).fit_transform(mnist_data)
 
     # plot with 33% lowest energy edges
     edge_energies = embedor.distances
@@ -96,52 +96,52 @@ def benchmark_datasets(n_points):
     
     # compute z-scores for low energy edges
     z_scores_mean, z_scores_std, _ = low_energy_edge_stats(embedding, embedor.G, low_energy_graph)
-    # z_scores_mean_euc, z_scores_std_euc, _ = low_energy_edge_stats(embedding_euc, embedor_euc.G, low_energy_graph)
-    # z_scores_mean_umap, z_scores_std_umap, _ = low_energy_edge_stats(umap_emb, embedor.G, low_energy_graph)
+    z_scores_mean_euc, z_scores_std_euc, _ = low_energy_edge_stats(embedding_euc, embedor_euc.G, low_energy_graph)
+    z_scores_mean_umap, z_scores_std_umap, _ = low_energy_edge_stats(umap_emb, embedor.G, low_energy_graph)
     z_scores_mean_umap_orcmanl, z_scores_std_umap_orcmanl, _ = low_energy_edge_stats(umap_orcmanl_emb, embedor.G, low_energy_graph)
-    # z_scores_mean_tsne, z_scores_std_tsne , _= low_energy_edge_stats(tsne_emb, embedor.G, low_energy_graph)
+    z_scores_mean_tsne, z_scores_std_tsne , _= low_energy_edge_stats(tsne_emb, embedor.G, low_energy_graph)
     z_scores_mean_tsne_orcmanl, z_scores_std_tsne_orcmanl, _ = low_energy_edge_stats(tsne_orcmanl_emb, embedor.G, low_energy_graph)
-    # z_scores_mean_phate, z_scores_std_phate, _ = low_energy_edge_stats(phate_emb, embedor.G, low_energy_graph)
-    # z_scores_mean_spectral, z_scores_std_spectral, _ = low_energy_edge_stats(spectral_emb, embedor.G, low_energy_graph)
-    # z_scores_mean_iso, z_scores_std_iso, _ = low_energy_edge_stats(iso_emb, embedor.G, low_energy_graph)
+    z_scores_mean_phate, z_scores_std_phate, _ = low_energy_edge_stats(phate_emb, embedor.G, low_energy_graph)
+    z_scores_mean_spectral, z_scores_std_spectral, _ = low_energy_edge_stats(spectral_emb, embedor.G, low_energy_graph)
+    z_scores_mean_iso, z_scores_std_iso, _ = low_energy_edge_stats(iso_emb, embedor.G, low_energy_graph)
 
     stats_dict['mnist'] = {
         'embedor': {
             'z_scores_mean': z_scores_mean,
             'z_scores_std': z_scores_std
         },
-        # 'embedor_euc': {
-        #     'z_scores_mean': z_scores_mean_euc,
-        #     'z_scores_std': z_scores_std_euc
-        # },
-        # 'umap': {
-        #     'z_scores_mean': z_scores_mean_umap,
-        #     'z_scores_std': z_scores_std_umap
-        # },
+        'embedor_euc': {
+            'z_scores_mean': z_scores_mean_euc,
+            'z_scores_std': z_scores_std_euc
+        },
+        'umap': {
+            'z_scores_mean': z_scores_mean_umap,
+            'z_scores_std': z_scores_std_umap
+        },
         'umap_orcmanl': {
             'z_scores_mean': z_scores_mean_umap_orcmanl,
             'z_scores_std': z_scores_std_umap_orcmanl
         },
-        # 'tsne': {
-        #     'z_scores_mean': z_scores_mean_tsne,
-        #     'z_scores_std': z_scores_std_tsne
-        # },
+        'tsne': {
+            'z_scores_mean': z_scores_mean_tsne,
+            'z_scores_std': z_scores_std_tsne
+        },
         'tsne_orcmanl': {
             'z_scores_mean': z_scores_mean_tsne_orcmanl,
             'z_scores_std': z_scores_std_tsne_orcmanl
         },
-        # 'phate': {
-        #     'z_scores_mean': z_scores_mean_phate,
-        #     'z_scores_std': z_scores_std_phate
-        # },
-        # 'spectral': {
-        #     'z_scores_mean': z_scores_mean_spectral,
-        #     'z_scores_std': z_scores_std_spectral
-        # },
-        # 'iso': {
-        #     'z_scores_mean': z_scores_mean_iso,
-        #     'z_scores_std': z_scores_std_iso
-        # }
+        'phate': {
+            'z_scores_mean': z_scores_mean_phate,
+            'z_scores_std': z_scores_std_phate
+        },
+        'spectral': {
+            'z_scores_mean': z_scores_mean_spectral,
+            'z_scores_std': z_scores_std_spectral
+        },
+        'iso': {
+            'z_scores_mean': z_scores_mean_iso,
+            'z_scores_std': z_scores_std_iso
+        }
     }
 
     # save figures
@@ -164,43 +164,43 @@ def benchmark_datasets(n_points):
     plt.savefig(os.path.join(embedor_path, 'variable_edge_widths.png'))
     plt.close()
 
-    # embedor_euc_path = os.path.join(mnist_path, 'embedor_euc')
-    # os.makedirs(embedor_euc_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(embedding_euc, embedor_euc.G, node_color=mnist_labels[embedor_euc.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(embedor_euc_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(embedding_euc, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(embedor_euc_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(embedding_euc, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(embedor_euc_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(embedding_euc, embedor_euc.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(embedor_euc_path, 'variable_edge_widths.png'))
-    # plt.close()
+    embedor_euc_path = os.path.join(mnist_path, 'embedor_euc')
+    os.makedirs(embedor_euc_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding_euc, embedor_euc.G, node_color=mnist_labels[embedor_euc.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(embedor_euc_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding_euc, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(embedor_euc_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding_euc, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(embedor_euc_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding_euc, embedor_euc.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(embedor_euc_path, 'variable_edge_widths.png'))
+    plt.close()
     
-    # umap_path = os.path.join(mnist_path, 'umap')
-    # os.makedirs(umap_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(umap_emb, embedor.G, node_color=mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(umap_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(umap_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(umap_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(umap_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(umap_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(umap_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(umap_path, 'variable_edge_widths.png'))
-    # plt.close()
+    umap_path = os.path.join(mnist_path, 'umap')
+    os.makedirs(umap_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(umap_emb, embedor.G, node_color=mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(umap_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(umap_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(umap_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(umap_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(umap_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(umap_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(umap_path, 'variable_edge_widths.png'))
+    plt.close()
     
     umap_orcmanl_path = os.path.join(mnist_path, 'umap_orcmanl')
     os.makedirs(umap_orcmanl_path, exist_ok=False)
@@ -221,24 +221,24 @@ def benchmark_datasets(n_points):
     plt.savefig(os.path.join(umap_orcmanl_path, 'variable_edge_widths.png'))
     plt.close()
 
-    # tsne_path = os.path.join(mnist_path, 'tsne')
-    # os.makedirs(tsne_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(tsne_emb, embedor.G, node_color=mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(tsne_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(tsne_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(tsne_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(tsne_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(tsne_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(tsne_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(tsne_path, 'variable_edge_widths.png'))
-    # plt.close()
+    tsne_path = os.path.join(mnist_path, 'tsne')
+    os.makedirs(tsne_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(tsne_emb, embedor.G, node_color=mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(tsne_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(tsne_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(tsne_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(tsne_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(tsne_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(tsne_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(tsne_path, 'variable_edge_widths.png'))
+    plt.close()
 
     tsne_orcmanl_path = os.path.join(mnist_path, 'tsne_orcmanl')
     os.makedirs(tsne_orcmanl_path, exist_ok=False)
@@ -260,338 +260,338 @@ def benchmark_datasets(n_points):
     plt.close()
     
 
-    # phate_path = os.path.join(mnist_path, 'phate')
-    # os.makedirs(phate_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(phate_emb, embedor.G, node_color=mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(phate_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(phate_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(phate_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(phate_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(phate_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(phate_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(phate_path, 'variable_edge_widths.png'))
-    # plt.close()
+    phate_path = os.path.join(mnist_path, 'phate')
+    os.makedirs(phate_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(phate_emb, embedor.G, node_color=mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(phate_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(phate_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(phate_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(phate_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(phate_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(phate_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(phate_path, 'variable_edge_widths.png'))
+    plt.close()
     
-    # spectral_path = os.path.join(mnist_path, 'spectral')
-    # os.makedirs(spectral_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(spectral_emb, embedor.G, node_color=mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(spectral_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(spectral_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(spectral_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(spectral_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(spectral_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(spectral_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(spectral_path, 'variable_edge_widths.png'))
-    # plt.close()
+    spectral_path = os.path.join(mnist_path, 'spectral')
+    os.makedirs(spectral_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(spectral_emb, embedor.G, node_color=mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(spectral_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(spectral_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(spectral_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(spectral_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(spectral_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(spectral_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(spectral_path, 'variable_edge_widths.png'))
+    plt.close()
     
-    # iso_path = os.path.join(mnist_path, 'iso')
-    # os.makedirs(iso_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(iso_emb, embedor.G, node_color=mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(iso_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(iso_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(iso_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(iso_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(iso_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(iso_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(iso_path, 'variable_edge_widths.png'))
-    # plt.close()
+    iso_path = os.path.join(mnist_path, 'iso')
+    os.makedirs(iso_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(iso_emb, embedor.G, node_color=mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(iso_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(iso_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(iso_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(iso_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(iso_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(iso_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(iso_path, 'variable_edge_widths.png'))
+    plt.close()
 
 
-    # # fashion_mnist
-    # fashion_mnist_path = os.path.join(save_path, dt_string, 'fashion_mnist')
-    # os.makedirs(fashion_mnist_path, exist_ok=False)
-    # fashion_mnist_data, fashion_mnist_labels = get_fmnist_data(n_samples=n_points, label=None)
+    # fashion_mnist
+    fashion_mnist_path = os.path.join(save_path, dt_string, 'fashion_mnist')
+    os.makedirs(fashion_mnist_path, exist_ok=False)
+    fashion_mnist_data, fashion_mnist_labels = get_fmnist_data(n_samples=n_points, label=None)
 
-    # orcmanl = ORCManL(verbose=True)
-    # orcmanl.fit(fashion_mnist_data)
-    # G_pruned_nk = nk.nxadapter.nx2nk(orcmanl.G_pruned)
-    # apsp = nk.distance.APSP(G_pruned_nk).run().getDistances()
-    # apsp = np.array(apsp)
-    # # clamp to 1e10
-    # apsp[apsp > 1e10] = 1e10
+    orcmanl = ORCManL(verbose=True)
+    orcmanl.fit(fashion_mnist_data)
+    G_pruned_nk = nk.nxadapter.nx2nk(orcmanl.G_pruned)
+    apsp = nk.distance.APSP(G_pruned_nk).run().getDistances()
+    apsp = np.array(apsp)
+    # clamp to 1e10
+    apsp[apsp > 1e10] = 1e10
 
-    # embedor = EmbedOR(exp_params)
-    # embedding = embedor.fit_transform(fashion_mnist_data)
-    # embedor_euc = EmbedOR(exp_params, edge_weight='euclidean')
-    # embedding_euc = embedor_euc.fit_transform(fashion_mnist_data)
-    # umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean').fit_transform(fashion_mnist_data)
-    # umap_orcmanl_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='precomputed').fit_transform(apsp)
-    # tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300).fit_transform(fashion_mnist_data)
-    # tsne_orcmanl_emb = TSNE(n_components=2, perplexity=30, n_iter=300, metric='precomputed', init='random').fit_transform(apsp)
-    # phate_emb = phate.PHATE(n_jobs=-2).fit_transform(fashion_mnist_data)
-    # spectral_emb = SpectralEmbedding(n_components=2).fit_transform(fashion_mnist_data)
-    # iso_emb = Isomap(n_neighbors=15, n_components=2).fit_transform(fashion_mnist_data)
+    embedor = EmbedOR(exp_params)
+    embedding = embedor.fit_transform(fashion_mnist_data)
+    embedor_euc = EmbedOR(exp_params, edge_weight='euclidean')
+    embedding_euc = embedor_euc.fit_transform(fashion_mnist_data)
+    umap_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='euclidean').fit_transform(fashion_mnist_data)
+    umap_orcmanl_emb = umap.UMAP(n_neighbors=15, min_dist=0.1, metric='precomputed').fit_transform(apsp)
+    tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300).fit_transform(fashion_mnist_data)
+    tsne_orcmanl_emb = TSNE(n_components=2, perplexity=30, n_iter=300, metric='precomputed', init='random').fit_transform(apsp)
+    phate_emb = phate.PHATE(n_jobs=-2).fit_transform(fashion_mnist_data)
+    spectral_emb = SpectralEmbedding(n_components=2).fit_transform(fashion_mnist_data)
+    iso_emb = Isomap(n_neighbors=15, n_components=2).fit_transform(fashion_mnist_data)
 
-    # # plot with 33% lowest energy edges
-    # edge_energies = embedor.distances
-    # # sort the edges by energy
-    # indices = np.argsort(edge_energies)
-    # # get the top 100 edges
-    # top_indices = indices[:len(embedor.G.edges()) // 3]
-    # desired_edges = [pair for i, pair in enumerate(embedor.G.edges()) if i in top_indices]
-    # # create a new graph with the desired edges
-    # low_energy_graph = embedor.G.copy()
-    # # remove all edges from the graph
-    # low_energy_graph.remove_edges_from(low_energy_graph.edges())
-    # # add the desired edges to the graph
-    # low_energy_graph.add_edges_from(desired_edges)
+    # plot with 33% lowest energy edges
+    edge_energies = embedor.distances
+    # sort the edges by energy
+    indices = np.argsort(edge_energies)
+    # get the top 100 edges
+    top_indices = indices[:len(embedor.G.edges()) // 3]
+    desired_edges = [pair for i, pair in enumerate(embedor.G.edges()) if i in top_indices]
+    # create a new graph with the desired edges
+    low_energy_graph = embedor.G.copy()
+    # remove all edges from the graph
+    low_energy_graph.remove_edges_from(low_energy_graph.edges())
+    # add the desired edges to the graph
+    low_energy_graph.add_edges_from(desired_edges)
 
-    # # plot with 2% highest energy edges
-    # bottom_indices = indices[-len(embedor.G.edges()) // 50:]
-    # desired_edges = [pair for i, pair in enumerate(embedor.G.edges()) if i in bottom_indices]
-    # # create a new graph with the desired edges
-    # high_energy_graph = embedor.G.copy()
-    # # remove all edges from the graph
-    # high_energy_graph.remove_edges_from(high_energy_graph.edges())
-    # # add the desired edges to the graph
-    # high_energy_graph.add_edges_from(desired_edges)
+    # plot with 2% highest energy edges
+    bottom_indices = indices[-len(embedor.G.edges()) // 50:]
+    desired_edges = [pair for i, pair in enumerate(embedor.G.edges()) if i in bottom_indices]
+    # create a new graph with the desired edges
+    high_energy_graph = embedor.G.copy()
+    # remove all edges from the graph
+    high_energy_graph.remove_edges_from(high_energy_graph.edges())
+    # add the desired edges to the graph
+    high_energy_graph.add_edges_from(desired_edges)
 
-    # # plot with thickness dependent on affinity computed from energy
-    # affinities = embedor.affinities
-    # max_thickness = 0.5
-    # edge_widths = np.array(affinities)**1.5 * (max_thickness / (np.max(affinities))**1.5)
+    # plot with thickness dependent on affinity computed from energy
+    affinities = embedor.affinities
+    max_thickness = 0.5
+    edge_widths = np.array(affinities)**1.5 * (max_thickness / (np.max(affinities))**1.5)
 
-    # # compute z-scores for low energy edges
-    # z_scores_mean, z_scores_std, _ = low_energy_edge_stats(embedding, embedor.G, low_energy_graph)
-    # z_scores_mean_euc, z_scores_std_euc, _ = low_energy_edge_stats(embedding_euc, embedor_euc.G, low_energy_graph)
-    # z_scores_mean_umap, z_scores_std_umap, _ = low_energy_edge_stats(umap_emb, embedor.G, low_energy_graph)
-    # z_scores_mean_umap_orcmanl, z_scores_std_umap_orcmanl, _ = low_energy_edge_stats(umap_orcmanl_emb, embedor.G, low_energy_graph)
-    # z_scores_mean_tsne, z_scores_std_tsne, _ = low_energy_edge_stats(tsne_emb, embedor.G, low_energy_graph)
-    # z_scores_mean_tsne_orcmanl, z_scores_std_tsne_orcmanl, _ = low_energy_edge_stats(tsne_orcmanl_emb, embedor.G, low_energy_graph)
-    # z_scores_mean_phate, z_scores_std_phate, _ = low_energy_edge_stats(phate_emb, embedor.G, low_energy_graph)
-    # z_scores_mean_spectral, z_scores_std_spectral,_ = low_energy_edge_stats(spectral_emb, embedor.G, low_energy_graph)
-    # z_scores_mean_iso, z_scores_std_iso,_ = low_energy_edge_stats(iso_emb, embedor.G, low_energy_graph)
-    # stats_dict['fashion_mnist'] = {
-    #     'embedor': {
-    #         'z_scores_mean': z_scores_mean,
-    #         'z_scores_std': z_scores_std
-    #     },
-    #     'embedor_euc': {
-    #         'z_scores_mean': z_scores_mean_euc,
-    #         'z_scores_std': z_scores_std_euc
-    #     },
-    #     'umap': {
-    #         'z_scores_mean': z_scores_mean_umap,
-    #         'z_scores_std': z_scores_std_umap
-    #     },
-    #     'umap_orcmanl': {
-    #         'z_scores_mean': z_scores_mean_umap_orcmanl,
-    #         'z_scores_std': z_scores_std_umap_orcmanl
-    #     },
-    #     'tsne': {
-    #         'z_scores_mean': z_scores_mean_tsne,
-    #         'z_scores_std': z_scores_std_tsne
-    #     },
-    #     'tsne_orcmanl': {
-    #         'z_scores_mean': z_scores_mean_tsne_orcmanl,
-    #         'z_scores_std': z_scores_std_tsne_orcmanl
-    #     },
-    #     'phate': {
-    #         'z_scores_mean': z_scores_mean_phate,
-    #         'z_scores_std': z_scores_std_phate
-    #     },
-    #     'spectral': {
-    #         'z_scores_mean': z_scores_mean_spectral,
-    #         'z_scores_std': z_scores_std_spectral
-    #     },
-    #     'iso': {
-    #         'z_scores_mean': z_scores_mean_iso,
-    #         'z_scores_std': z_scores_std_iso
-    #     }
-    # }
+    # compute z-scores for low energy edges
+    z_scores_mean, z_scores_std, _ = low_energy_edge_stats(embedding, embedor.G, low_energy_graph)
+    z_scores_mean_euc, z_scores_std_euc, _ = low_energy_edge_stats(embedding_euc, embedor_euc.G, low_energy_graph)
+    z_scores_mean_umap, z_scores_std_umap, _ = low_energy_edge_stats(umap_emb, embedor.G, low_energy_graph)
+    z_scores_mean_umap_orcmanl, z_scores_std_umap_orcmanl, _ = low_energy_edge_stats(umap_orcmanl_emb, embedor.G, low_energy_graph)
+    z_scores_mean_tsne, z_scores_std_tsne, _ = low_energy_edge_stats(tsne_emb, embedor.G, low_energy_graph)
+    z_scores_mean_tsne_orcmanl, z_scores_std_tsne_orcmanl, _ = low_energy_edge_stats(tsne_orcmanl_emb, embedor.G, low_energy_graph)
+    z_scores_mean_phate, z_scores_std_phate, _ = low_energy_edge_stats(phate_emb, embedor.G, low_energy_graph)
+    z_scores_mean_spectral, z_scores_std_spectral,_ = low_energy_edge_stats(spectral_emb, embedor.G, low_energy_graph)
+    z_scores_mean_iso, z_scores_std_iso,_ = low_energy_edge_stats(iso_emb, embedor.G, low_energy_graph)
+    stats_dict['fashion_mnist'] = {
+        'embedor': {
+            'z_scores_mean': z_scores_mean,
+            'z_scores_std': z_scores_std
+        },
+        'embedor_euc': {
+            'z_scores_mean': z_scores_mean_euc,
+            'z_scores_std': z_scores_std_euc
+        },
+        'umap': {
+            'z_scores_mean': z_scores_mean_umap,
+            'z_scores_std': z_scores_std_umap
+        },
+        'umap_orcmanl': {
+            'z_scores_mean': z_scores_mean_umap_orcmanl,
+            'z_scores_std': z_scores_std_umap_orcmanl
+        },
+        'tsne': {
+            'z_scores_mean': z_scores_mean_tsne,
+            'z_scores_std': z_scores_std_tsne
+        },
+        'tsne_orcmanl': {
+            'z_scores_mean': z_scores_mean_tsne_orcmanl,
+            'z_scores_std': z_scores_std_tsne_orcmanl
+        },
+        'phate': {
+            'z_scores_mean': z_scores_mean_phate,
+            'z_scores_std': z_scores_std_phate
+        },
+        'spectral': {
+            'z_scores_mean': z_scores_mean_spectral,
+            'z_scores_std': z_scores_std_spectral
+        },
+        'iso': {
+            'z_scores_mean': z_scores_mean_iso,
+            'z_scores_std': z_scores_std_iso
+        }
+    }
 
-    # # save figures
-    # embedor_path = os.path.join(fashion_mnist_path, 'embedor')
-    # os.makedirs(embedor_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(embedding, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(embedor_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(embedding, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(embedor_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(embedding, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(embedor_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(embedding, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(embedor_path, 'variable_edge_widths.png'))
-    # plt.close()
+    # save figures
+    embedor_path = os.path.join(fashion_mnist_path, 'embedor')
+    os.makedirs(embedor_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(embedor_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(embedor_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(embedor_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(embedor_path, 'variable_edge_widths.png'))
+    plt.close()
 
-    # embedor_euc_path = os.path.join(fashion_mnist_path, 'embedor_euc')
-    # os.makedirs(embedor_euc_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(embedding_euc, embedor_euc.G, node_color=fashion_mnist_labels[embedor_euc.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(embedor_euc_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(embedding_euc, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(embedor_euc_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(embedding_euc, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(embedor_euc_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(embedding_euc, embedor_euc.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(embedor_euc_path, 'variable_edge_widths.png'))
-    # plt.close()    
+    embedor_euc_path = os.path.join(fashion_mnist_path, 'embedor_euc')
+    os.makedirs(embedor_euc_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding_euc, embedor_euc.G, node_color=fashion_mnist_labels[embedor_euc.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(embedor_euc_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding_euc, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(embedor_euc_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding_euc, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(embedor_euc_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(embedding_euc, embedor_euc.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(embedor_euc_path, 'variable_edge_widths.png'))
+    plt.close()    
 
-    # umap_path = os.path.join(fashion_mnist_path, 'umap')
-    # os.makedirs(umap_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(umap_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(umap_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(umap_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(umap_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(umap_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(umap_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(umap_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(umap_path, 'variable_edge_widths.png'))
-    # plt.close()
+    umap_path = os.path.join(fashion_mnist_path, 'umap')
+    os.makedirs(umap_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(umap_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(umap_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(umap_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(umap_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(umap_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(umap_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(umap_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(umap_path, 'variable_edge_widths.png'))
+    plt.close()
 
-    # umap_orcmanl_path = os.path.join(fashion_mnist_path, 'umap_orcmanl')
-    # os.makedirs(umap_orcmanl_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(umap_orcmanl_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(umap_orcmanl_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(umap_orcmanl_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(umap_orcmanl_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(umap_orcmanl_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(umap_orcmanl_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(umap_orcmanl_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(umap_orcmanl_path, 'variable_edge_widths.png'))
-    # plt.close()
+    umap_orcmanl_path = os.path.join(fashion_mnist_path, 'umap_orcmanl')
+    os.makedirs(umap_orcmanl_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(umap_orcmanl_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(umap_orcmanl_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(umap_orcmanl_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(umap_orcmanl_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(umap_orcmanl_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(umap_orcmanl_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(umap_orcmanl_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(umap_orcmanl_path, 'variable_edge_widths.png'))
+    plt.close()
     
-    # tsne_path = os.path.join(fashion_mnist_path, 'tsne')
-    # os.makedirs(tsne_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(tsne_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(tsne_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(tsne_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(tsne_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(tsne_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(tsne_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(tsne_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(tsne_path, 'variable_edge_widths.png'))
-    # plt.close()
+    tsne_path = os.path.join(fashion_mnist_path, 'tsne')
+    os.makedirs(tsne_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(tsne_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(tsne_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(tsne_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(tsne_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(tsne_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(tsne_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(tsne_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(tsne_path, 'variable_edge_widths.png'))
+    plt.close()
 
-    # tsne_orcmanl_path = os.path.join(fashion_mnist_path, 'tsne_orcmanl')
-    # os.makedirs(tsne_orcmanl_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(tsne_orcmanl_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')   
-    # plt.savefig(os.path.join(tsne_orcmanl_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(tsne_orcmanl_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(tsne_orcmanl_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(tsne_orcmanl_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(tsne_orcmanl_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(tsne_orcmanl_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(tsne_orcmanl_path, 'variable_edge_widths.png'))
-    # plt.close()
+    tsne_orcmanl_path = os.path.join(fashion_mnist_path, 'tsne_orcmanl')
+    os.makedirs(tsne_orcmanl_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(tsne_orcmanl_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')   
+    plt.savefig(os.path.join(tsne_orcmanl_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(tsne_orcmanl_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(tsne_orcmanl_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(tsne_orcmanl_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(tsne_orcmanl_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(tsne_orcmanl_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(tsne_orcmanl_path, 'variable_edge_widths.png'))
+    plt.close()
 
-    # phate_path = os.path.join(fashion_mnist_path, 'phate')
-    # os.makedirs(phate_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(phate_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(phate_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(phate_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(phate_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(phate_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(phate_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(phate_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(phate_path, 'variable_edge_widths.png'))
-    # plt.close()
+    phate_path = os.path.join(fashion_mnist_path, 'phate')
+    os.makedirs(phate_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(phate_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(phate_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(phate_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(phate_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(phate_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(phate_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(phate_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(phate_path, 'variable_edge_widths.png'))
+    plt.close()
     
-    # spectral_path = os.path.join(fashion_mnist_path, 'spectral')
-    # os.makedirs(spectral_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(spectral_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(spectral_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(spectral_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(spectral_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(spectral_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(spectral_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(spectral_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(spectral_path, 'variable_edge_widths.png'))
-    # plt.close()
+    spectral_path = os.path.join(fashion_mnist_path, 'spectral')
+    os.makedirs(spectral_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(spectral_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(spectral_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(spectral_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(spectral_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(spectral_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(spectral_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(spectral_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(spectral_path, 'variable_edge_widths.png'))
+    plt.close()
     
-    # iso_path = os.path.join(fashion_mnist_path, 'iso')
-    # os.makedirs(iso_path, exist_ok=False)
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(iso_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(iso_path, 'class_annot.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(iso_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(iso_path, 'low_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(iso_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    # plt.savefig(os.path.join(iso_path, 'high_energy_graph.png'))
-    # plt.close()
-    # plt.figure(figsize=(10, 10))
-    # plot_graph_2D(iso_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    # plt.savefig(os.path.join(iso_path, 'variable_edge_widths.png'))
-    # plt.close()
+    iso_path = os.path.join(fashion_mnist_path, 'iso')
+    os.makedirs(iso_path, exist_ok=False)
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(iso_emb, embedor.G, node_color=fashion_mnist_labels[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(iso_path, 'class_annot.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(iso_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(iso_path, 'low_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(iso_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    plt.savefig(os.path.join(iso_path, 'high_energy_graph.png'))
+    plt.close()
+    plt.figure(figsize=(10, 10))
+    plot_graph_2D(iso_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    plt.savefig(os.path.join(iso_path, 'variable_edge_widths.png'))
+    plt.close()
 
     # save stats
     stats_path = os.path.join(save_path, dt_string, 'stats.json')
