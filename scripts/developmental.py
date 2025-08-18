@@ -21,6 +21,7 @@ sns.set_theme()
 
 exp_params = {
     'p': 3,
+    'mode': 'nbrs',
     'n_neighbors': 15,
 }
 
@@ -38,6 +39,8 @@ def developmental(n_points):
     os.makedirs(developmental_path, exist_ok=True)
 
     developmental_data, days = get_developmental_data(n_points=n_points)
+    # make developmental_data a numpy array
+    developmental_data = developmental_data.toarray()
     stats_dict = {}
 
     orcmanl = ORCManL(verbose=True)
@@ -61,7 +64,7 @@ def developmental(n_points):
     tsne_emb = TSNE(n_components=2, perplexity=30, n_iter=300, init='random').fit_transform(developmental_data)
     tsne_orcmanl_emb = TSNE(n_components=2, perplexity=30, n_iter=300, metric='precomputed', init='random').fit_transform(apsp)
     phate_emb = phate.PHATE(n_jobs=-2).fit_transform(developmental_data)
-    spectral_emb = SpectralEmbedding(n_components=2).fit_transform(developmental_data)
+    # spectral_emb = SpectralEmbedding(n_components=2).fit_transform(developmental_data)
     iso_emb = Isomap(n_neighbors=15, n_components=2).fit_transform(developmental_data)
 
     # plot with 33% lowest energy edges
@@ -101,7 +104,7 @@ def developmental(n_points):
     z_scores_mean_tsne, z_scores_std_tsne, _ = low_energy_edge_stats(tsne_emb, embedor.G, low_energy_graph)
     z_scores_mean_tsne_orcmanl, z_scores_std_tsne_orcmanl, _ = low_energy_edge_stats(tsne_orcmanl_emb, embedor.G, low_energy_graph)
     z_scores_mean_phate, z_scores_std_phate, _ = low_energy_edge_stats(phate_emb, embedor.G, low_energy_graph)
-    z_scores_mean_spectral, z_scores_std_spectral,_ = low_energy_edge_stats(spectral_emb, embedor.G, low_energy_graph)
+    # z_scores_mean_spectral, z_scores_std_spectral,_ = low_energy_edge_stats(spectral_emb, embedor.G, low_energy_graph)
     z_scores_mean_iso, z_scores_std_iso,_ = low_energy_edge_stats(iso_emb, embedor.G, low_energy_graph)
 
     stats_dict['eb'] = {
@@ -133,10 +136,10 @@ def developmental(n_points):
             'z_scores_mean': z_scores_mean_phate,
             'z_scores_std': z_scores_std_phate
         },
-        'spectral': {
-            'z_scores_mean': z_scores_mean_spectral,
-            'z_scores_std': z_scores_std_spectral
-        },
+        # 'spectral': {
+        #     'z_scores_mean': z_scores_mean_spectral,
+        #     'z_scores_std': z_scores_std_spectral
+        # },
         'iso': {
             'z_scores_mean': z_scores_mean_iso,
             'z_scores_std': z_scores_std_iso
@@ -277,24 +280,24 @@ def developmental(n_points):
     plt.savefig(os.path.join(phate_path, 'variable_edge_widths.png'))
     plt.close()
     
-    spectral_path = os.path.join(developmental_path, 'spectral')
-    os.makedirs(spectral_path, exist_ok=False)
-    plt.figure(figsize=(10, 10))
-    plot_graph_2D(spectral_emb, embedor.G, node_color=days[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
-    plt.savefig(os.path.join(spectral_path, 'class_annot.png'))
-    plt.close()
-    plt.figure(figsize=(10, 10))
-    plot_graph_2D(spectral_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
-    plt.savefig(os.path.join(spectral_path, 'low_energy_graph.png'))
-    plt.close()
-    plt.figure(figsize=(10, 10))
-    plot_graph_2D(spectral_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
-    plt.savefig(os.path.join(spectral_path, 'high_energy_graph.png'))
-    plt.close()
-    plt.figure(figsize=(10, 10))
-    plot_graph_2D(spectral_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
-    plt.savefig(os.path.join(spectral_path, 'variable_edge_widths.png'))
-    plt.close()
+    # spectral_path = os.path.join(developmental_path, 'spectral')
+    # os.makedirs(spectral_path, exist_ok=False)
+    # plt.figure(figsize=(10, 10))
+    # plot_graph_2D(spectral_emb, embedor.G, node_color=days[embedor.G.nodes()], edge_width=0, node_size=0.1, edge_color='red')
+    # plt.savefig(os.path.join(spectral_path, 'class_annot.png'))
+    # plt.close()
+    # plt.figure(figsize=(10, 10))
+    # plot_graph_2D(spectral_emb, low_energy_graph, node_color=None, edge_width=0.1, node_size=0.1, edge_color='green')
+    # plt.savefig(os.path.join(spectral_path, 'low_energy_graph.png'))
+    # plt.close()
+    # plt.figure(figsize=(10, 10))
+    # plot_graph_2D(spectral_emb, high_energy_graph, node_color=None, edge_width=0.02, node_size=0.1, edge_color='red')
+    # plt.savefig(os.path.join(spectral_path, 'high_energy_graph.png'))
+    # plt.close()
+    # plt.figure(figsize=(10, 10))
+    # plot_graph_2D(spectral_emb, embedor.G, node_color=None, edge_width=edge_widths, node_size=0.1, edge_color='green')
+    # plt.savefig(os.path.join(spectral_path, 'variable_edge_widths.png'))
+    # plt.close()
     
     iso_path = os.path.join(developmental_path, 'iso')
     os.makedirs(iso_path, exist_ok=False)
