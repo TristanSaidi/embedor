@@ -316,3 +316,6 @@ class EmbedOR(object):
                 self.G_low_energy.remove_edge(u, v)
         # plot the graph
         plot_graph_2D(self.embedding, self.G_low_energy, node_color=None, edge_width=0.1, node_size=0.0, edge_color='green')
+
+    def plot_full_graph(self):
+        plot_graph_2D(self.embedding, self.G, node_color=None, edge_width=0.1, node_size=0.0, edge_color='green')
