@@ -48,7 +48,11 @@ def fmnist(n_points):
     apsp = np.array(apsp)
     # clamp to 1e10
     apsp[apsp > 1e10] = 1e10
-
+    # reorder the apsp matrix to match the indices of the pruned graph
+    indices = list(orcmanl.G_pruned.nodes())
+    inverse_indices = [indices.index(i) for i in range(len(indices))]
+    apsp = apsp[inverse_indices, :][:, inverse_indices]
+    
     embedor = EmbedOR(exp_params)
     embedding = embedor.fit_transform(fashion_mnist_data)
     embedor_euc = EmbedOR(exp_params, edge_weight='euclidean')
