@@ -3,6 +3,7 @@ from src.data.manifold import *
 import numpy as np
 import torchvision
 import torch
+import os
 
 REPO_ROOT = os.getenv('PYTHONPATH')
 DATA_DIR = os.path.join(REPO_ROOT, 'data')
