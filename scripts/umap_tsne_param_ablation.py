@@ -1,6 +1,7 @@
 from src.data.data import *
 from src.embedor import *
 from src.plotting import *
+from src.utils.graph_utils import *
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
