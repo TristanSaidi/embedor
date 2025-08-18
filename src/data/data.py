@@ -913,8 +913,8 @@ import pandas as pd
 def get_developmental_data(n_points):
     
     # Path to input files
-    VAR_DS_PATH = DATA_DIR + 'developmental/ExprMatrix.var.genes.h5ad'
-    CELL_DAYS_PATH = DATA_DIR + 'developmental/cell_days.txt'
+    VAR_DS_PATH = DATA_DIR + '/developmental/ExprMatrix.var.genes.h5ad'
+    CELL_DAYS_PATH = DATA_DIR + '/developmental/cell_days.txt'
 
     days_df = pd.read_csv(CELL_DAYS_PATH, index_col='id', sep='\t')
 
