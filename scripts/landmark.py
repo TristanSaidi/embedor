@@ -59,13 +59,13 @@ emb_landmark_2 = EmbedOR(n_landmarks=50).fit_transform(return_dict['data'])
 # %%
 plt.figure(figsize=(10, 6))
 plot_data_2D(emb_full, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_circles_full.png'), dpi=1200)
+plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_full.png'), dpi=1200)
 plt.figure(figsize=(10, 6))
 plot_data_2D(emb_landmark, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_250.png'), dpi=1200)
+plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_landmark_250.png'), dpi=1200)
 plt.figure(figsize=(10, 6))
 plot_data_2D(emb_landmark_2, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_50.png'), dpi=1200)
+plt.savefig(os.path.join(output_dir, 'emb_swiss_roll_landmark_50.png'), dpi=1200)
 
 # %%
 noise = 0.5
@@ -79,13 +79,13 @@ emb_landmark_2 = EmbedOR(n_landmarks=50).fit_transform(return_dict['data'])
 # %%
 plt.figure(figsize=(10, 6))
 plot_data_2D(emb_full, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_circles_full.png'), dpi=1200)
+plt.savefig(os.path.join(output_dir, 'emb_torus_full.png'), dpi=1200)
 plt.figure(figsize=(10, 6))
 plot_data_2D(emb_landmark, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_250.png'), dpi=1200)
+plt.savefig(os.path.join(output_dir, 'emb_torus_landmark_250.png'), dpi=1200)
 plt.figure(figsize=(10, 6))
 plot_data_2D(emb_landmark_2, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_50.png'), dpi=1200)
+plt.savefig(os.path.join(output_dir, 'emb_torus_landmark_50.png'), dpi=1200)
 
 # %%
 noisy_tree, tree = gen_tree(n_points=n_points)
@@ -97,13 +97,13 @@ emb_landmark_2 = EmbedOR(n_landmarks=50).fit_transform(noisy_tree)
 # %%
 plt.figure(figsize=(10, 6))
 plot_data_2D(emb_full, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_circles_full.png'), dpi=1200)
+plt.savefig(os.path.join(output_dir, 'emb_tree_full.png'), dpi=1200)
 plt.figure(figsize=(10, 6))
 plot_data_2D(emb_landmark, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_250.png'), dpi=1200)
+plt.savefig(os.path.join(output_dir, 'emb_tree_landmark_250.png'), dpi=1200)
 plt.figure(figsize=(10, 6))
 plot_data_2D(emb_landmark_2, None, None)
-plt.savefig(os.path.join(output_dir, 'emb_circles_landmark_50.png'), dpi=1200)
+plt.savefig(os.path.join(output_dir, 'emb_tree_landmark_50.png'), dpi=1200)
 
 # %%
 
