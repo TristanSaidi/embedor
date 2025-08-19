@@ -18,9 +18,10 @@ import phate
 
 n_points = 5000
 # set seed
-np.random.seed(42)
+np.random.seed(0)
 
-output_dir = "../outputs/geodesic_distance_umap_tsne_abl"
+REPO_ROOT = os.getenv('PYTHONPATH')
+output_dir = os.path.join(REPO_ROOT, 'outputs', 'geodesic_distance_umap_tsne_abl')
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 datetime_str = pd.Timestamp.now().strftime("%Y-%m-%d_%H-%M-%S")
