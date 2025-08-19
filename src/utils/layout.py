@@ -353,7 +353,6 @@ def joint_probabilities(distances, desired_perplexity, verbose):
         distances, desired_perplexity, verbose
     )
     P = conditional_P + conditional_P.T
-    print(P.shape)
     return squareform(P)
 
 
