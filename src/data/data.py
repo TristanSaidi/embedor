@@ -932,8 +932,8 @@ def get_developmental_data(n_points):
 def get_chimp_data(n_points):
     
     # Path to input files
-    data_path = DATA_DIR+'chimp/chimp.data.npy'
-    labels_path = DATA_DIR+'chimp/chimp.labels.npy'
+    data_path = DATA_DIR+'/chimp/chimp.data.npy'
+    labels_path = DATA_DIR+'/chimp/chimp.labels.npy'
 
     data = np.load(data_path)
     labels = np.load(labels_path)
@@ -948,7 +948,7 @@ def get_chimp_data(n_points):
 def get_macosko_data(n_points):
     import gzip
     import pickle
-    data_path = DATA_DIR+'macosko/macosko_2015.pkl.gz'
+    data_path = DATA_DIR+'/macosko/macosko_2015.pkl.gz'
     with gzip.open(data_path, 'rb') as f:
         data_and_labels = pickle.load(f)
     # get 50 pcs
