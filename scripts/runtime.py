@@ -60,7 +60,7 @@ for idx, n_points in enumerate(n_points_array):
 
     if not cutoff_embedor_landmark:
         time_start = time.time()
-        embedor = EmbedOR(landmark_selection='random', n_landmarks=50, subsample=True, subsample_factor=0.2, approx_affinities=True)
+        embedor = EmbedOR(landmark_selection='random', n_landmarks=50, subsample=True, subsample_factor=0.2, approx_affinities=True, edge_weight='frc')
         _ = embedor.fit_transform(return_dict['data'])
         time_end = time.time()
         embedor_time_landmark = time_end - time_start
