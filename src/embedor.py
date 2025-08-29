@@ -103,9 +103,15 @@ class EmbedOR(object):
         )
         return self.embedding
 
-    def fit(self, X=None):
-        self.X = X
-        self._build_nnG() # self.G, self.curvatures, self.A are now available
+    def fit(self, X=None, A=None):
+        if X is None and A is None:
+            raise ValueError("Either data X or adjacency matrix A must be provided.")
+        if X is not None:
+            self.X = X
+            self._build_nnG() # self.G, self.curvatures, self.A are now available
+        else:
+            self.G = nx.from_numpy_array(A)
+        self._compute_curvatures() # self.curvatures are now available
         self._compute_distances()
         self._compute_affinities()
         self._update_G() # add edge attribute 'affinity'
@@ -132,17 +138,18 @@ class EmbedOR(object):
         # compute nearest neighbor graph
         time_start = time.time()
         return_dict = get_nn_graph(self.X, self.nng_params)
-        G = return_dict['G']
+        self.G = return_dict['G']
         time_end = time.time()
         print(f"Time taken to build nearest neighbor graph: {time_end - time_start:.2f} seconds")
-        
+    
+    def _compute_curvatures(self):
         # compute ORC
         time_start = time.time()
         if self.edge_weight == "orc":
-            return_dict = compute_orc(G, nbrhood_size=1) # compute ORC using 1-hop neighborhood
+            return_dict = compute_orc(self.G, nbrhood_size=1) # compute ORC using 1-hop neighborhood
             self.curvatures = return_dict['orcs']
         elif self.edge_weight == "frc":
-            return_dict = compute_frc(G)
+            return_dict = compute_frc(self.G)
             self.curvatures = return_dict['frcs']
             self.k_min = min(self.k_min, min(self.curvatures)-1) # -1 to avoid log(0)
             self.k_max = max(self.k_max, max(self.curvatures))
