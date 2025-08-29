@@ -185,6 +185,71 @@ def moons(n_points, noise, noise_thresh=0.275, sep=0.5, width=1, dim=2):
     }
     return return_dict
 
+
+
+
+def us(n_points, noise, noise_thresh=0.275, sep=-1.25, width=1, dim=2):
+    """
+    Generate a us dataset.
+    Parameters
+    ----------
+    n_points : int
+        The number of points to generate.
+    noise : float
+        The standard deviation of the Gaussian noise.
+    Returns
+    -------
+    Dictionary providing the following keys:
+        data : array-like, shape (n_points, 2)
+            The generated moons.
+        cluster : array-like, shape (n_points,)
+            The integer labels for class membership of each sample.
+        data_supersample : array-like, shape (n_points*supersample_factor, 2)
+            The supersampled moons.
+        subsample_indices : list
+            The indices of the subsampled moons.
+    """
+
+    N_total = n_points
+    # moons, cluster = datasets.make_moons(n_samples=N_total, noise=0.0)
+
+    n_samples_out = N_total // 2
+    n_samples_in = N_total - n_samples_out
+    
+    outer_circ_x = width * np.cos(np.linspace(0, np.pi, n_samples_out)) + 1.0
+    outer_circ_y = np.sin(np.linspace(0, np.pi, n_samples_out))
+    inner_circ_x = width * (1 - np.cos(np.linspace(0, np.pi, n_samples_in)))
+    inner_circ_y = 1 - np.sin(np.linspace(0, np.pi, n_samples_in)) - sep
+    if dim == 3:
+        # uniform over [-0.2, 0.2] for third dimension
+        outer_circ_z = 0.8 * (2 * np.random.rand(N_total) - 1)
+        moons = np.vstack(
+            [np.append(outer_circ_x, inner_circ_x), np.append(outer_circ_y, inner_circ_y), outer_circ_z]
+        ).T
+    else:
+        moons = np.vstack(
+            [np.append(outer_circ_x, inner_circ_x), np.append(outer_circ_y, inner_circ_y)]
+        ).T
+    cluster = np.hstack(
+        [np.zeros(n_samples_out, dtype=np.intp), np.ones(n_samples_in, dtype=np.intp)]
+    )
+
+    # clip noise and resample if necessary
+    z =  noise*np.random.randn(*moons.shape)
+    if noise_thresh is not None:
+        resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
+        while len(resample_indices) > 0:
+            z[resample_indices] = noise*np.random.randn(*z[resample_indices].shape)
+            resample_indices = np.where(np.linalg.norm(z, axis=1) > noise_thresh)[0]
+    noisy_moons = moons.copy() + z
+
+    return_dict = {
+        'data': noisy_moons,
+        'cluster': cluster,
+        'noiseless_data': moons,
+    }
+    return return_dict
+
 def swiss_roll(n_points, noise, dim=3, noise_thresh=0.275, hole=False, double=False):
     """
     Generate a Swiss roll dataset.
