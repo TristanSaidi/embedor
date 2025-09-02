@@ -148,15 +148,18 @@ class EmbedOR(object):
         if self.edge_weight == "orc":
             return_dict = compute_orc(self.G, nbrhood_size=1) # compute ORC using 1-hop neighborhood
             self.curvatures = return_dict['orcs']
+            self.G = return_dict['G']
+
         elif self.edge_weight == "frc":
             return_dict = compute_frc(self.G)
             self.curvatures = return_dict['frcs']
             self.k_min = min(self.k_min, min(self.curvatures)-1) # -1 to avoid log(0)
             self.k_max = max(self.k_max, max(self.curvatures))
+            self.G = return_dict['G']
+
         time_end = time.time()
         print(f"Time taken to compute {self.edge_weight.upper()} for each edge: {time_end - time_start:.2f} seconds")
 
-        self.G = return_dict['G']
         self.A = nx.to_numpy_array(self.G, weight='weight', nodelist=list(range(len(self.G.nodes()))))
         # get knn indices
         A_ut = self.A * np.triu(np.ones(self.A.shape), k=1)
