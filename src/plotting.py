@@ -3,7 +3,6 @@ import numpy as np
 import networkx as nx
 import os
 
-
 # plotting functions
 
 def plot_data_2D(X, color, title=None, node_size=10, axes=False, exp_name=None, filename=None, cmap=plt.cm.viridis):
@@ -30,6 +29,8 @@ def plot_data_2D(X, color, title=None, node_size=10, axes=False, exp_name=None, 
         os.makedirs(exp_dir, exist_ok=True)
         path = os.path.join(exp_dir, filename)
         plt.savefig(path)
+
+
 
 def plot_graph_2D(X, graph, title=None, node_color='#1f78b4', edge_color='lightgray', node_size=1, edge_width=1.0, colorbar=False, exp_name=None, filename=None, cmap=plt.cm.Spectral):
     """

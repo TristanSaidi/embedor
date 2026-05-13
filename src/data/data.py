@@ -5,7 +5,10 @@ import torchvision
 import torch
 import os
 
-REPO_ROOT = os.getenv('PYTHONPATH')
+# REPO_ROOT = os.getenv('PYTHONPATH')
+# DATA_DIR = os.path.join(REPO_ROOT, 'data')
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 DATA_DIR = os.path.join(REPO_ROOT, 'data')
 
 # Data generation functions
