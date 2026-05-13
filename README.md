@@ -5,26 +5,18 @@
 
 ### Installation
 
-Clone the repository:
-
-``` bash
-git clone https://github.com/kathyzxu/embedOR.git
-cd embedOR
-```
-
 Create and activate a virtual environment:
 
 ``` bash
 python3 -m venv env
 source env/bin/activate
-export PYTHONPATH="$PWD"
 ```
 
-Upgrade pip and install dependencies:
+Upgrade pip and install the published package from PyPI:
 
 ``` bash
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install embedor
 ```
 
 `requirements.txt` tracks the third-party packages imported from `src/`, including the optional biological-data and visualization helpers in `src/data/data.py` and `src/vis.py`.
